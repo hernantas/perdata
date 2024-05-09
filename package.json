@@ -1,6 +1,7 @@
 {
   "name": "perdata",
   "description": "Typescript-first Query and ORM library",
+  "type": "module",
   "author": {
     "name": "Zulfikar Raditya Hernanta",
     "email": "hernantas@gmail.com"
@@ -17,7 +18,11 @@
     "query"
   ],
   "private": true,
+  "scripts": {
+    "format": "npx prettier --write ."
+  },
   "devDependencies": {
+    "prettier": "^3.2.5",
     "typescript": "^5.4.5"
   }
 }
