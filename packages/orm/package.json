@@ -25,5 +25,8 @@
   },
   "dependencies": {
     "pertype": "^0.1.0"
+  },
+  "devDependencies": {
+    "dotenv": "^16.4.5"
   }
 }
