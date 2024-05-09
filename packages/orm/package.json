@@ -1,0 +1,23 @@
+{
+  "name": "@perdata/orm",
+  "description": "Typescript-first ORM library",
+  "type": "module",
+  "author": {
+    "name": "Zulfikar Raditya Hernanta",
+    "email": "hernantas@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hernantas/perdata.git"
+  },
+  "license": "MIT",
+  "keywords": [
+    "database",
+    "db",
+    "sql",
+    "query",
+    "pg",
+    "postgre",
+    "postgresql"
+  ]
+}
