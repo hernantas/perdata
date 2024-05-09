@@ -20,6 +20,9 @@
     "postgre",
     "postgresql"
   ],
+  "scripts": {
+    "test": "npx jest"
+  },
   "dependencies": {
     "pertype": "^0.1.0"
   }
