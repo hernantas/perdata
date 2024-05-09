@@ -16,5 +16,8 @@
     "sql",
     "query"
   ],
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
 }
