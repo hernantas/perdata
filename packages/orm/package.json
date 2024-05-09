@@ -19,5 +19,8 @@
     "pg",
     "postgre",
     "postgresql"
-  ]
+  ],
+  "dependencies": {
+    "pertype": "^0.1.0"
+  }
 }
