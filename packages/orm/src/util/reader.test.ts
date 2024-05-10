@@ -12,4 +12,14 @@ describe('SchemaReader', () => {
       ),
     ).toBe(true)
   })
+
+  it('Should read metadata attribute', () => {
+    expect(
+      SchemaReader.read(
+        string().set('message', 'hello'),
+        'message',
+        string().optional(),
+      ),
+    ).toBe('hello')
+  })
 })
