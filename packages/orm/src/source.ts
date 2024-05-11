@@ -1,4 +1,6 @@
 import { Knex, knex } from 'knex'
+import { AnyRecord, AnySchema, ObjectSchema } from 'pertype'
+import { QueryTable } from './query'
 
 export interface DataSourceConfig {
   client: 'pg'
@@ -40,6 +42,12 @@ export class DataSource {
    */
   public query(): Knex.QueryBuilder {
     return this.instance.queryBuilder()
+  }
+
+  public from<P extends AnyRecord<AnySchema>>(
+    schema: ObjectSchema<P>,
+  ): QueryTable<P> {
+    return new QueryTable(this.query(), schema)
   }
 
   public async close(): Promise<void> {
