@@ -1,4 +1,3 @@
-import 'dotenv/config'
 import { DataSource } from './source'
 import { getEnvironment } from './util/environment'
 

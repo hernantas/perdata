@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import { TypeOf, literal, number, object, string } from 'pertype'
 
 const Environment = object({
