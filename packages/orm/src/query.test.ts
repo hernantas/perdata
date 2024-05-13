@@ -89,5 +89,24 @@ describe('Query', () => {
     expect(result[0]).toHaveProperty('value', 'value')
   })
 
+  it('Should be able to update elements', async () => {
+    const tableName = 'simple_update'
+    await db.query().from(tableName).truncate()
+
+    const schema = base.set('table', tableName)
+    await db.from(schema).insert({ key: 'key', value: 'value' })
+
+    await db
+      .from(schema)
+      .update({ key: 'key-u', value: 'value-u' })
+      .where(eq('id', 1))
+
+    const result = await db.from(schema).select()
+    expect(result).toHaveLength(1)
+    expect(result[0]).toHaveProperty('id')
+    expect(result[0]).toHaveProperty('key', 'key-u')
+    expect(result[0]).toHaveProperty('value', 'value-u')
+  })
+
   afterAll(() => db.close())
 })

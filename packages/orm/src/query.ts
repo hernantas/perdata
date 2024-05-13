@@ -21,6 +21,10 @@ export class QueryTable<P extends AnyRecord<Schema>> extends Query<P> {
   public insert(value: Partial<TypeOf<P>>): QueryInsert<P> {
     return new QueryInsert(this.builder, this.schema, value)
   }
+
+  public update(value: Partial<TypeOf<P>>): QueryUpdate<P> {
+    return new QueryUpdate(this.builder, this.schema, value)
+  }
 }
 
 export abstract class QueryExecutable<P extends AnyRecord<Schema>>
@@ -254,5 +258,45 @@ export class QueryInsert<
       .insert(this.schema.pick(...keys).encode(this.value as TypeOf<P>))
       .returning(table.columns.map((column) => column.name))
     return this.schema.array().decode(result)
+  }
+}
+
+export class QueryUpdate<
+  P extends AnyRecord<Schema>,
+> extends QueryExecutable<P> {
+  public constructor(
+    builder: Knex.QueryBuilder,
+    schema: ObjectSchema<P>,
+    private readonly value: Partial<TypeOf<P>>,
+    private readonly condition?: QueryConditionGroup<P>,
+  ) {
+    super(builder, schema)
+  }
+
+  public override async run(): Promise<TypeOf<P>[]> {
+    const table = new TableMetadata(this.schema)
+    const keys = Object.keys(this.value)
+    let query = this.builder
+      .from(table.name)
+      .update(this.schema.pick(...keys).encode(this.value as TypeOf<P>))
+      .returning(table.columns.map((column) => column.name))
+
+    if (this.condition !== undefined) {
+      query = where(query, this.condition)
+    }
+
+    const result = await query
+    return this.schema.array().decode(result)
+  }
+
+  public where<K extends keyof P>(
+    condition: QueryCondition<P, K> | QueryConditionGroup<P>,
+  ): QueryUpdate<P> {
+    return new QueryUpdate(
+      this.builder,
+      this.schema,
+      this.value,
+      and(condition),
+    )
   }
 }
