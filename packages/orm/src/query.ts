@@ -1,15 +1,15 @@
 import { Knex } from 'knex'
-import { AnyRecord, AnySchema, ObjectSchema, TypeOf } from 'pertype'
+import { AnyRecord, ObjectSchema, Schema, TypeOf } from 'pertype'
 import { TableMetadata } from './metadata'
 
-export abstract class Query<P extends AnyRecord<AnySchema>> {
+export abstract class Query<P extends AnyRecord<Schema>> {
   public constructor(
     protected readonly builder: Knex.QueryBuilder,
     protected readonly schema: ObjectSchema<P>,
   ) {}
 }
 
-export class QueryTable<P extends AnyRecord<AnySchema>> extends Query<P> {
+export class QueryTable<P extends AnyRecord<Schema>> extends Query<P> {
   public select(): QuerySelect<P>
   public select<K extends keyof P>(...keys: K[]): QuerySelect<Pick<P, K>>
   public select<K extends keyof P>(
@@ -19,7 +19,7 @@ export class QueryTable<P extends AnyRecord<AnySchema>> extends Query<P> {
   }
 }
 
-export abstract class QueryExecutable<P extends AnyRecord<AnySchema>>
+export abstract class QueryExecutable<P extends AnyRecord<Schema>>
   extends Query<P>
   implements PromiseLike<TypeOf<P>[]>
 {
@@ -34,7 +34,7 @@ export abstract class QueryExecutable<P extends AnyRecord<AnySchema>>
 }
 
 export class QuerySelect<
-  P extends AnyRecord<AnySchema>,
+  P extends AnyRecord<Schema>,
 > extends QueryExecutable<P> {
   public constructor(
     builder: Knex.QueryBuilder,
@@ -64,7 +64,7 @@ export class QuerySelect<
   }
 }
 
-function select<P extends AnyRecord<AnySchema>, K extends keyof P>(
+function select<P extends AnyRecord<Schema>, K extends keyof P>(
   builder: Knex.QueryBuilder,
   schema: ObjectSchema<P>,
   ...keys: K[]
