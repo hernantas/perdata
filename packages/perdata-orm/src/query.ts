@@ -2,23 +2,33 @@ import { Knex } from 'knex'
 import { AnyRecord, ObjectSchema, Schema, TypeOf } from 'pertype'
 import { TableMetadata } from './metadata'
 
-export abstract class Query<P extends AnyRecord<Schema>> {
-  public constructor(
-    protected readonly builder: Knex.QueryBuilder,
-    protected readonly schema: ObjectSchema<P>,
-  ) {}
+export class Query {
+  public constructor(protected readonly query: Knex.QueryBuilder) {}
+
+  public from<P extends AnyRecord<Schema>>(
+    schema: ObjectSchema<P>,
+  ): QueryTable<P> {
+    return new QueryTable(this.query, schema)
+  }
 }
 
-export class QueryTable<P extends AnyRecord<Schema>> extends Query<P> {
+export class QueryTable<P extends AnyRecord<Schema>> extends Query {
+  public constructor(
+    query: Knex.QueryBuilder,
+    protected readonly schema: ObjectSchema<P>,
+  ) {
+    super(query)
+  }
+
   public select(): QuerySelect<P>
   public select<K extends keyof P>(...keys: K[]): QuerySelect<Pick<P, K>>
   public select<K extends keyof P>(
     ...keys: K[]
   ): QuerySelect<P> | QuerySelect<Pick<P, K>> {
     return keys.length === 0
-      ? new QuerySelect(this.builder, this.schema)
+      ? new QuerySelect(this.query, this.schema)
       : new QuerySelect(
-          this.builder,
+          this.query,
           this.schema
             .pick(...keys)
             .set('entity', this.schema.get('entity'))
@@ -27,16 +37,16 @@ export class QueryTable<P extends AnyRecord<Schema>> extends Query<P> {
   }
 
   public insert(value: Partial<TypeOf<P>>): QueryInsert<P> {
-    return new QueryInsert(this.builder, this.schema, value)
+    return new QueryInsert(this.query, this.schema, value)
   }
 
   public update(value: Partial<TypeOf<P>>): QueryUpdate<P> {
-    return new QueryUpdate(this.builder, this.schema, value)
+    return new QueryUpdate(this.query, this.schema, value)
   }
 }
 
 export abstract class QueryExecutable<P extends AnyRecord<Schema>>
-  extends Query<P>
+  extends QueryTable<P>
   implements PromiseLike<TypeOf<P>[]>
 {
   public abstract run(): Promise<TypeOf<P>[]>
@@ -65,7 +75,7 @@ export class QuerySelect<
   public async run(): Promise<TypeOf<P>[]> {
     const table = new TableMetadata(this.schema)
 
-    let query = this.builder
+    let query = this.query
       .from(table.name)
       .select(...table.columns.map((column) => column.name))
 
@@ -87,7 +97,7 @@ export class QuerySelect<
 
   public limit(count: number): QuerySelect<P> {
     return new QuerySelect(
-      this.builder,
+      this.query,
       this.schema,
       this.condition,
       count,
@@ -97,7 +107,7 @@ export class QuerySelect<
 
   public offset(count: number): QuerySelect<P> {
     return new QuerySelect(
-      this.builder,
+      this.query,
       this.schema,
       this.condition,
       this.limitCount,
@@ -109,7 +119,7 @@ export class QuerySelect<
     condition: QueryCondition<P, K> | QueryConditionGroup<P>,
   ): QuerySelect<P> {
     return new QuerySelect(
-      this.builder,
+      this.query,
       this.schema,
       and(condition),
       this.limitCount,
@@ -267,7 +277,7 @@ export class QueryInsert<
   public override async run(): Promise<TypeOf<P>[]> {
     const table = new TableMetadata(this.schema)
     const keys = Object.keys(this.value)
-    const result = await this.builder
+    const result = await this.query
       .from(table.name)
       .insert(this.schema.pick(...keys).encode(this.value as TypeOf<P>))
       .returning(table.columns.map((column) => column.name))
@@ -290,7 +300,7 @@ export class QueryUpdate<
   public override async run(): Promise<TypeOf<P>[]> {
     const table = new TableMetadata(this.schema)
     const keys = Object.keys(this.value)
-    let query = this.builder
+    let query = this.query
       .from(table.name)
       .update(this.schema.pick(...keys).encode(this.value as TypeOf<P>))
       .returning(table.columns.map((column) => column.name))
@@ -306,11 +316,6 @@ export class QueryUpdate<
   public where<K extends keyof P>(
     condition: QueryCondition<P, K> | QueryConditionGroup<P>,
   ): QueryUpdate<P> {
-    return new QueryUpdate(
-      this.builder,
-      this.schema,
-      this.value,
-      and(condition),
-    )
+    return new QueryUpdate(this.query, this.schema, this.value, and(condition))
   }
 }

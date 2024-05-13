@@ -1,6 +1,6 @@
 import { Knex, knex } from 'knex'
 import { AnyRecord, AnySchema, ObjectSchema } from 'pertype'
-import { QueryTable } from './query'
+import { Query, QueryTable } from './query'
 
 export interface DataSourceConfig {
   client: 'pg'
@@ -35,19 +35,18 @@ export class DataSource {
     })
   }
 
-  /**
-   * Get raw query builder from current data connection.
-   *
-   * @returns Raw query builder
-   */
-  public query(): Knex.QueryBuilder {
-    return this.instance.queryBuilder()
+  public connection(): Knex {
+    return this.instance
+  }
+
+  public query(): Query {
+    return new Query(this.instance.queryBuilder())
   }
 
   public from<P extends AnyRecord<AnySchema>>(
     schema: ObjectSchema<P>,
   ): QueryTable<P> {
-    return new QueryTable(this.query(), schema)
+    return new Query(this.instance.queryBuilder()).from(schema)
   }
 
   public async close(): Promise<void> {

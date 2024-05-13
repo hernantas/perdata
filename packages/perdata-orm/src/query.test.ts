@@ -24,11 +24,11 @@ describe('Query', () => {
     const tableName = 'simple_select'
 
     beforeAll(async () => {
-      await db.query().from(tableName).truncate()
+      await db.connection().from(tableName).truncate()
       await Promise.all(
         [...Array(10).keys()].map((number) =>
           db
-            .query()
+            .connection()
             .from(tableName)
             .insert({ key: `key-${number}`, value: `value-${number}` }),
         ),
@@ -83,7 +83,7 @@ describe('Query', () => {
 
   it('Should be able to insert elements', async () => {
     const tableName = 'simple_insert'
-    await db.query().from(tableName).truncate()
+    await db.connection().from(tableName).truncate()
 
     const schema = base.set('table', tableName)
     await db.from(schema).insert({ key: 'key', value: 'value' })
@@ -97,7 +97,7 @@ describe('Query', () => {
 
   it('Should be able to update elements', async () => {
     const tableName = 'simple_update'
-    await db.query().from(tableName).truncate()
+    await db.connection().from(tableName).truncate()
 
     const schema = base.set('table', tableName)
     await db.from(schema).insert({ key: 'key', value: 'value' })
