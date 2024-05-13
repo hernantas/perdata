@@ -36,12 +36,31 @@ export abstract class QueryExecutable<P extends AnyRecord<AnySchema>>
 export class QuerySelect<
   P extends AnyRecord<AnySchema>,
 > extends QueryExecutable<P> {
+  public constructor(
+    builder: Knex.QueryBuilder,
+    schema: ObjectSchema<P>,
+    private readonly limitCount?: number,
+  ) {
+    super(builder, schema)
+  }
+
   public async run(): Promise<TypeOf<P>[]> {
     const table = new TableMetadata(this.schema)
-    const rows: AnyRecord[] = await this.builder
+
+    let query = this.builder
       .from(table.name)
       .select(...table.columns.map((column) => column.name))
-    return this.schema.array().decode(rows)
+
+    if (this.limitCount !== undefined) {
+      query = query.limit(this.limitCount)
+    }
+
+    const result = await query
+    return this.schema.array().decode(result)
+  }
+
+  public limit(count: number): QuerySelect<P> {
+    return new QuerySelect(this.builder, this.schema, count)
   }
 }
 

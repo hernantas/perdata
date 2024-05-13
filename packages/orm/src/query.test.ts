@@ -50,6 +50,12 @@ describe('Query', () => {
       expect(result[0]).not.toHaveProperty('key')
       expect(result[0]).not.toHaveProperty('value')
     })
+
+    it('Should be able to select with limit from db table', async () => {
+      const schema = base.set('table', tableName)
+      const result = await db.from(schema).select().limit(1)
+      expect(result).toHaveLength(1)
+    })
   })
 
   afterAll(() => db.close())
