@@ -101,37 +101,62 @@ function where<P extends AnyRecord<Schema>>(
   group: QueryConditionGroup<P>,
 ): Knex.QueryBuilder {
   if (group.operator === 'or') {
-    query = query.or
+    for (const condition of group.conditions) {
+      switch (condition.operator) {
+        case 'and':
+          query = query.orWhere((query) => where(query, condition))
+          break
+        case 'or':
+          query = query.orWhere((query) => where(query, condition))
+          break
+        case 'eq':
+          query = query.orWhere(condition.key, '=', condition.value)
+          break
+        case 'ne':
+          query = query.orWhere(condition.key, '<>', condition.value)
+          break
+        case 'gt':
+          query = query.orWhere(condition.key, '>', condition.value)
+          break
+        case 'gte':
+          query = query.orWhere(condition.key, '>=', condition.value)
+          break
+        case 'lt':
+          query = query.orWhere(condition.key, '<', condition.value)
+          break
+        case 'lte':
+          query = query.orWhere(condition.key, '<=', condition.value)
+          break
+      }
+    }
   } else if (group.operator === 'and') {
-    query = query.and
-  }
-
-  for (const condition of group.conditions) {
-    switch (condition.operator) {
-      case 'and':
-        query = query.where((query) => where(query, condition))
-        break
-      case 'or':
-        query = query.where((query) => where(query, condition))
-        break
-      case 'eq':
-        query = query.where(condition.key, '=', condition.value)
-        break
-      case 'ne':
-        query = query.where(condition.key, '<>', condition.value)
-        break
-      case 'gt':
-        query = query.where(condition.key, '>', condition.value)
-        break
-      case 'gte':
-        query = query.where(condition.key, '>=', condition.value)
-        break
-      case 'lt':
-        query = query.where(condition.key, '<', condition.value)
-        break
-      case 'lte':
-        query = query.where(condition.key, '<=', condition.value)
-        break
+    for (const condition of group.conditions) {
+      switch (condition.operator) {
+        case 'and':
+          query = query.andWhere((query) => where(query, condition))
+          break
+        case 'or':
+          query = query.andWhere((query) => where(query, condition))
+          break
+        case 'eq':
+          query = query.andWhere(condition.key, '=', condition.value)
+          break
+        case 'ne':
+          query = query.andWhere(condition.key, '<>', condition.value)
+          break
+        case 'gt':
+          query = query.andWhere(condition.key, '>', condition.value)
+          break
+        case 'gte':
+          query = query.andWhere(condition.key, '>=', condition.value)
+          break
+        case 'lt':
+          query = query.andWhere(condition.key, '<', condition.value)
+          break
+        case 'lte':
+          query = query.andWhere(condition.key, '<=', condition.value)
+          break
+      }
     }
   }
 

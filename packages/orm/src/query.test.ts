@@ -1,7 +1,7 @@
 import { number, object, string } from 'pertype'
+import { eq, or } from './query'
 import { DataSource } from './source'
 import { getEnvironment } from './util/environment'
-import { eq } from './query'
 
 describe('Query', () => {
   const { CLIENT, HOST, PORT, USER, PASSWORD, DATABASE } = getEnvironment()
@@ -62,6 +62,16 @@ describe('Query', () => {
       const schema = base.set('table', tableName)
       const result = await db.from(schema).select().where(eq('id', 1))
       expect(result).toHaveLength(1)
+    })
+
+    it('Should be able to select with filter using "or" from db table', async () => {
+      const schema = base.set('table', tableName)
+      const query = db
+        .from(schema)
+        .select()
+        .where(or(eq('id', 1), eq('id', 2)))
+      const result = await query
+      expect(result).toHaveLength(2)
     })
   })
 
