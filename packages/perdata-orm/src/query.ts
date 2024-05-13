@@ -15,7 +15,15 @@ export class QueryTable<P extends AnyRecord<Schema>> extends Query<P> {
   public select<K extends keyof P>(
     ...keys: K[]
   ): QuerySelect<P> | QuerySelect<Pick<P, K>> {
-    return select(this.builder, this.schema, ...keys)
+    return keys.length === 0
+      ? new QuerySelect(this.builder, this.schema)
+      : new QuerySelect(
+          this.builder,
+          this.schema
+            .pick(...keys)
+            .set('entity', this.schema.get('entity'))
+            .set('table', this.schema.get('table')),
+        )
   }
 
   public insert(value: Partial<TypeOf<P>>): QueryInsert<P> {
@@ -108,22 +116,6 @@ export class QuerySelect<
       this.offsetCount,
     )
   }
-}
-
-function select<P extends AnyRecord<Schema>, K extends keyof P>(
-  builder: Knex.QueryBuilder,
-  schema: ObjectSchema<P>,
-  ...keys: K[]
-): QuerySelect<P> | QuerySelect<Pick<P, K>> {
-  return keys.length === 0
-    ? new QuerySelect(builder, schema)
-    : new QuerySelect(
-        builder,
-        schema
-          .pick(...keys)
-          .set('entity', schema.get('entity'))
-          .set('table', schema.get('table')),
-      )
 }
 
 function where<P extends AnyRecord<Schema>>(
