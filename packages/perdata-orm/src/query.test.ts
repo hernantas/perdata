@@ -58,6 +58,12 @@ describe('Query', () => {
       expect(result).toHaveLength(1)
     })
 
+    it('Should be able to select with offset from db table', async () => {
+      const schema = base.set('table', tableName)
+      const result = await db.from(schema).select().limit(1).offset(2)
+      expect(result).toHaveLength(1)
+    })
+
     it('Should be able to select with filter from db table', async () => {
       const schema = base.set('table', tableName)
       const result = await db.from(schema).select().where(eq('id', 1))

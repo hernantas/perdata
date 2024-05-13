@@ -49,6 +49,7 @@ export class QuerySelect<
     schema: ObjectSchema<P>,
     private readonly condition?: QueryConditionGroup<P>,
     private readonly limitCount?: number,
+    private readonly offsetCount?: number,
   ) {
     super(builder, schema)
   }
@@ -68,12 +69,32 @@ export class QuerySelect<
       query = query.limit(this.limitCount)
     }
 
+    if (this.offsetCount !== undefined) {
+      query = query.offset(this.offsetCount)
+    }
+
     const result = await query
     return this.schema.array().decode(result)
   }
 
   public limit(count: number): QuerySelect<P> {
-    return new QuerySelect(this.builder, this.schema, this.condition, count)
+    return new QuerySelect(
+      this.builder,
+      this.schema,
+      this.condition,
+      count,
+      this.offsetCount,
+    )
+  }
+
+  public offset(count: number): QuerySelect<P> {
+    return new QuerySelect(
+      this.builder,
+      this.schema,
+      this.condition,
+      this.limitCount,
+      count,
+    )
   }
 
   public where<K extends keyof P>(
@@ -84,6 +105,7 @@ export class QuerySelect<
       this.schema,
       and(condition),
       this.limitCount,
+      this.offsetCount,
     )
   }
 }
