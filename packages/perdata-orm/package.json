@@ -32,6 +32,7 @@
     "import": "./dist/index.mjs"
   },
   "scripts": {
+    "clean": "npx rimraf ./dist *.tsbuildinfo .rollup.*",
     "test": "npx jest",
     "build": "npx tsx ../../build.ts"
   },
