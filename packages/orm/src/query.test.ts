@@ -15,7 +15,7 @@ describe('Query', () => {
   })
 
   const base = object({
-    id: number().set('id', true).set('generated', true),
+    id: number().optional().set('id', true).set('generated', true),
     key: string(),
     value: string().optional(),
   })
@@ -73,6 +73,20 @@ describe('Query', () => {
       const result = await query
       expect(result).toHaveLength(2)
     })
+  })
+
+  it('Should be able to insert elements', async () => {
+    const tableName = 'simple_insert'
+    await db.query().from(tableName).truncate()
+
+    const schema = base.set('table', tableName)
+    await db.from(schema).insert({ key: 'key', value: 'value' })
+
+    const result = await db.from(schema).select()
+    expect(result).toHaveLength(1)
+    expect(result[0]).toHaveProperty('id')
+    expect(result[0]).toHaveProperty('key', 'key')
+    expect(result[0]).toHaveProperty('value', 'value')
   })
 
   afterAll(() => db.close())

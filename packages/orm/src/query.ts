@@ -17,6 +17,10 @@ export class QueryTable<P extends AnyRecord<Schema>> extends Query<P> {
   ): QuerySelect<P> | QuerySelect<Pick<P, K>> {
     return select(this.builder, this.schema, ...keys)
   }
+
+  public insert(value: Partial<TypeOf<P>>): QueryInsert<P> {
+    return new QueryInsert(this.builder, this.schema, value)
+  }
 }
 
 export abstract class QueryExecutable<P extends AnyRecord<Schema>>
@@ -229,4 +233,26 @@ export function or<P extends AnyRecord<Schema>>(
   ...conditions: (QueryCondition<P, keyof P> | QueryConditionGroup<P>)[]
 ): QueryConditionGroup<P> {
   return { operator: 'or', conditions }
+}
+
+export class QueryInsert<
+  P extends AnyRecord<Schema>,
+> extends QueryExecutable<P> {
+  public constructor(
+    builder: Knex.QueryBuilder,
+    schema: ObjectSchema<P>,
+    private readonly value: Partial<TypeOf<P>>,
+  ) {
+    super(builder, schema)
+  }
+
+  public override async run(): Promise<TypeOf<P>[]> {
+    const table = new TableMetadata(this.schema)
+    const keys = Object.keys(this.value)
+    const result = await this.builder
+      .from(table.name)
+      .insert(this.schema.pick(...keys).encode(this.value as TypeOf<P>))
+      .returning(table.columns.map((column) => column.name))
+    return this.schema.array().decode(result)
+  }
 }
