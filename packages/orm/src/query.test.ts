@@ -1,6 +1,7 @@
 import { number, object, string } from 'pertype'
 import { DataSource } from './source'
 import { getEnvironment } from './util/environment'
+import { eq } from './query'
 
 describe('Query', () => {
   const { CLIENT, HOST, PORT, USER, PASSWORD, DATABASE } = getEnvironment()
@@ -54,6 +55,12 @@ describe('Query', () => {
     it('Should be able to select with limit from db table', async () => {
       const schema = base.set('table', tableName)
       const result = await db.from(schema).select().limit(1)
+      expect(result).toHaveLength(1)
+    })
+
+    it('Should be able to select with filter from db table', async () => {
+      const schema = base.set('table', tableName)
+      const result = await db.from(schema).select().where(eq('id', 1))
       expect(result).toHaveLength(1)
     })
   })
