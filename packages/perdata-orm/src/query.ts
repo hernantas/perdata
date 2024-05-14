@@ -65,7 +65,7 @@ export class QuerySelect<
   public constructor(
     builder: Knex.QueryBuilder,
     schema: ObjectSchema<P>,
-    private readonly condition?: QueryConditionGroup<P>,
+    private readonly condition?: QueryFilterGroup<P>,
     private readonly limitCount?: number,
     private readonly offsetCount?: number,
   ) {
@@ -80,7 +80,7 @@ export class QuerySelect<
       .select(...table.columns.map((column) => column.name))
 
     if (this.condition !== undefined) {
-      query = where(query, this.condition)
+      query = buildFilter(query, this.condition)
     }
 
     if (this.limitCount !== undefined) {
@@ -115,8 +115,8 @@ export class QuerySelect<
     )
   }
 
-  public where<K extends keyof P>(
-    condition: QueryCondition<P, K> | QueryConditionGroup<P>,
+  public filter<K extends keyof P>(
+    condition: QueryFilter<P, K> | QueryFilterGroup<P>,
   ): QuerySelect<P> {
     return new QuerySelect(
       this.query,
@@ -128,18 +128,18 @@ export class QuerySelect<
   }
 }
 
-function where<P extends AnyRecord<Schema>>(
+function buildFilter<P extends AnyRecord<Schema>>(
   query: Knex.QueryBuilder,
-  group: QueryConditionGroup<P>,
+  group: QueryFilterGroup<P>,
 ): Knex.QueryBuilder {
   if (group.operator === 'or') {
     for (const condition of group.conditions) {
       switch (condition.operator) {
         case 'and':
-          query = query.orWhere((query) => where(query, condition))
+          query = query.orWhere((query) => buildFilter(query, condition))
           break
         case 'or':
-          query = query.orWhere((query) => where(query, condition))
+          query = query.orWhere((query) => buildFilter(query, condition))
           break
         case 'eq':
           query = query.orWhere(condition.key, '=', condition.value)
@@ -165,10 +165,10 @@ function where<P extends AnyRecord<Schema>>(
     for (const condition of group.conditions) {
       switch (condition.operator) {
         case 'and':
-          query = query.andWhere((query) => where(query, condition))
+          query = query.andWhere((query) => buildFilter(query, condition))
           break
         case 'or':
-          query = query.andWhere((query) => where(query, condition))
+          query = query.andWhere((query) => buildFilter(query, condition))
           break
         case 'eq':
           query = query.andWhere(condition.key, '=', condition.value)
@@ -195,10 +195,7 @@ function where<P extends AnyRecord<Schema>>(
   return query
 }
 
-export interface QueryCondition<
-  P extends AnyRecord<Schema>,
-  K extends keyof P,
-> {
+export interface QueryFilter<P extends AnyRecord<Schema>, K extends keyof P> {
   readonly operator: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte'
   readonly key: K
   readonly value: TypeOf<P[K]>
@@ -207,59 +204,59 @@ export interface QueryCondition<
 export function eq<P extends AnyRecord<Schema>, K extends keyof P>(
   key: K,
   value: TypeOf<P[K]>,
-): QueryCondition<P, K> {
+): QueryFilter<P, K> {
   return { key, operator: 'eq', value }
 }
 
 export function ne<P extends AnyRecord<Schema>, K extends keyof P>(
   key: K,
   value: TypeOf<P[K]>,
-): QueryCondition<P, K> {
+): QueryFilter<P, K> {
   return { key, operator: 'ne', value }
 }
 
 export function gt<P extends AnyRecord<Schema>, K extends keyof P>(
   key: K,
   value: TypeOf<P[K]>,
-): QueryCondition<P, K> {
+): QueryFilter<P, K> {
   return { key, operator: 'gt', value }
 }
 
 export function gte<P extends AnyRecord<Schema>, K extends keyof P>(
   key: K,
   value: TypeOf<P[K]>,
-): QueryCondition<P, K> {
+): QueryFilter<P, K> {
   return { key, operator: 'gte', value }
 }
 
 export function lt<P extends AnyRecord<Schema>, K extends keyof P>(
   key: K,
   value: TypeOf<P[K]>,
-): QueryCondition<P, K> {
+): QueryFilter<P, K> {
   return { key, operator: 'lt', value }
 }
 
 export function lte<P extends AnyRecord<Schema>, K extends keyof P>(
   key: K,
   value: TypeOf<P[K]>,
-): QueryCondition<P, K> {
+): QueryFilter<P, K> {
   return { key, operator: 'lte', value }
 }
 
-export interface QueryConditionGroup<P extends AnyRecord<Schema>> {
+export interface QueryFilterGroup<P extends AnyRecord<Schema>> {
   readonly operator: 'and' | 'or'
-  readonly conditions: (QueryCondition<P, keyof P> | QueryConditionGroup<P>)[]
+  readonly conditions: (QueryFilter<P, keyof P> | QueryFilterGroup<P>)[]
 }
 
 export function and<P extends AnyRecord<Schema>>(
-  ...conditions: (QueryCondition<P, keyof P> | QueryConditionGroup<P>)[]
-): QueryConditionGroup<P> {
+  ...conditions: (QueryFilter<P, keyof P> | QueryFilterGroup<P>)[]
+): QueryFilterGroup<P> {
   return { operator: 'and', conditions }
 }
 
 export function or<P extends AnyRecord<Schema>>(
-  ...conditions: (QueryCondition<P, keyof P> | QueryConditionGroup<P>)[]
-): QueryConditionGroup<P> {
+  ...conditions: (QueryFilter<P, keyof P> | QueryFilterGroup<P>)[]
+): QueryFilterGroup<P> {
   return { operator: 'or', conditions }
 }
 
@@ -292,7 +289,7 @@ export class QueryUpdate<
     builder: Knex.QueryBuilder,
     schema: ObjectSchema<P>,
     private readonly value: Partial<TypeOf<P>>,
-    private readonly condition?: QueryConditionGroup<P>,
+    private readonly condition?: QueryFilterGroup<P>,
   ) {
     super(builder, schema)
   }
@@ -306,7 +303,7 @@ export class QueryUpdate<
       .returning(table.columns.map((column) => column.name))
 
     if (this.condition !== undefined) {
-      query = where(query, this.condition)
+      query = buildFilter(query, this.condition)
     }
 
     const result = await query
@@ -314,7 +311,7 @@ export class QueryUpdate<
   }
 
   public where<K extends keyof P>(
-    condition: QueryCondition<P, K> | QueryConditionGroup<P>,
+    condition: QueryFilter<P, K> | QueryFilterGroup<P>,
   ): QueryUpdate<P> {
     return new QueryUpdate(this.query, this.schema, this.value, and(condition))
   }

@@ -66,7 +66,7 @@ describe('Query', () => {
 
     it('Should be able to select with filter from db table', async () => {
       const schema = base.set('table', tableName)
-      const result = await db.from(schema).select().where(eq('id', 1))
+      const result = await db.from(schema).select().filter(eq('id', 1))
       expect(result).toHaveLength(1)
     })
 
@@ -75,7 +75,7 @@ describe('Query', () => {
       const query = db
         .from(schema)
         .select()
-        .where(or(eq('id', 1), eq('id', 2)))
+        .filter(or(eq('id', 1), eq('id', 2)))
       const result = await query
       expect(result).toHaveLength(2)
     })
