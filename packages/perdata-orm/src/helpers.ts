@@ -27,7 +27,7 @@ export function generate(
 export interface RelationOptions {
   readonly owner?: 'source' | 'foreign'
   readonly name?: string
-  readonly reference?: string
+  readonly reference?: 'strong' | 'weak'
 }
 
 export function relation(
@@ -41,7 +41,7 @@ export function relation(
       schema = schema.set('joinName', options.name)
     }
     if (options.reference !== undefined) {
-      schema = schema.set('joinReference', options.reference)
+      schema = schema.set('reference', options.reference)
     }
     return schema
   }

@@ -103,6 +103,7 @@ export class RelationColumnMetadata
   public readonly owner: 'source' | 'foreign'
   public readonly sourceColumn: ColumnMetadata
   public readonly foreignColumn: ColumnMetadata
+  public readonly type: 'strong' | 'weak'
 
   public constructor(
     table: TableMetadata,
@@ -139,6 +140,8 @@ export class RelationColumnMetadata
 
     this.sourceColumn = this.owner === 'source' ? ownerColumn : targetColumn
     this.foreignColumn = this.owner === 'source' ? targetColumn : ownerColumn
+
+    this.type = readReference(schema)
   }
 }
 
@@ -149,6 +152,8 @@ export interface RelationMetadata {
   readonly sourceColumn: ColumnMetadata
   /** Column used as join column in foreign table */
   readonly foreignColumn: ColumnMetadata
+  /** Relation type (strong will also update the referenced value) */
+  readonly type: 'weak' | 'strong'
 }
 
 function readProperties(schema: Schema): AnyRecord<Schema> {
@@ -218,4 +223,9 @@ function readJoinName(schema: Schema): string | undefined {
     SchemaReader.read(schema, 'join_name', string().optional()) ||
     SchemaReader.read(schema, 'join', string().optional())
   )
+}
+
+function readReference(schema: Schema): 'strong' | 'weak' {
+  const options = union(literal('strong'), literal('weak')).optional()
+  return SchemaReader.read(schema, 'reference', options) ?? 'weak'
 }
