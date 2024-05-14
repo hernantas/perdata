@@ -1,6 +1,7 @@
 import { Knex, knex } from 'knex'
 import { AnyRecord, AnySchema, ObjectSchema } from 'pertype'
 import { Query, QueryTable } from './query'
+import { Transaction } from './transaction'
 
 export interface DataSourceConfig {
   client: 'pg'
@@ -47,6 +48,12 @@ export class DataSource {
     schema: ObjectSchema<P>,
   ): QueryTable<P> {
     return new Query(this.instance.queryBuilder()).from(schema)
+  }
+
+  public transaction<T = void>(
+    fn: (trx: Transaction) => Promise<T>,
+  ): Promise<T> {
+    return this.instance.transaction((trx) => fn(new Transaction(trx)))
   }
 
   public async close(): Promise<void> {
