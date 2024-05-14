@@ -327,12 +327,12 @@ export class QueryInsert<
   public override async run(): Promise<TypeOf<P>[]> {
     const table = new TableMetadata(this.schema)
     const keys = Object.keys(this.value)
-    const result = await this.query
+    const ids = await this.query
       .clone()
       .from(table.name)
       .insert(this.schema.pick(...keys).encode(this.value as TypeOf<P>))
-      .returning(table.baseColumns.map((column) => column.name))
-    return table.baseSchema.array().decode(result) as TypeOf<P>[]
+      .returning(table.id.name)
+    return await this.from(this.schema).find(includes(table.id.name, ids))
   }
 }
 
@@ -357,14 +357,13 @@ export class QuerySave<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
       .filter((col) => !col.id)
       .filter((col) => Object.hasOwn(this.value, col.name))
       .map((col) => col.name)
-    let query = this.query
+    const ids = await this.query
       .clone()
       .from(table.name)
       .update(this.schema.pick(...keys).encode(this.value as TypeOf<P>))
       .where(table.id.name, id)
-      .returning(table.baseColumns.map((column) => column.name))
+      .returning(table.id.name)
 
-    const result = await query
-    return table.baseSchema.array().decode(result) as TypeOf<P>[]
+    return await this.from(this.schema).find(includes(table.id.name, ids))
   }
 }
