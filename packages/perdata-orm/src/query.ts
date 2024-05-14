@@ -306,7 +306,7 @@ export class QueryInsert<
     const result = await this.query
       .from(table.name)
       .insert(this.schema.pick(...keys).encode(this.value as TypeOf<P>))
-      .returning(table.columns.map((column) => column.name))
+      .returning(table.baseColumns.map((column) => column.name))
     return table.baseSchema.array().decode(result) as TypeOf<P>[]
   }
 }
@@ -336,7 +336,7 @@ export class QuerySave<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
       .from(table.name)
       .update(this.schema.pick(...keys).encode(this.value as TypeOf<P>))
       .where(table.id.name, id)
-      .returning(table.columns.map((column) => column.name))
+      .returning(table.baseColumns.map((column) => column.name))
 
     const result = await query
     return table.baseSchema.array().decode(result) as TypeOf<P>[]
