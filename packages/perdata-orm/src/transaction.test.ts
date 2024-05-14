@@ -23,7 +23,9 @@ describe('Transaction', () => {
     const schema = base.set('table', tableName)
     await db.connection().from(tableName).truncate()
     await db.transaction(async (db) => {
-      await db.from(schema).insert({ key: 'key-1', value: 'value-1' })
+      await db
+        .from(schema)
+        .insert({ id: undefined, key: 'key-1', value: 'value-1' })
       await db.commit()
     })
 
@@ -39,7 +41,9 @@ describe('Transaction', () => {
     const schema = base.set('table', tableName)
     await db.connection().from(tableName).truncate()
     await db.transaction(async (db) => {
-      await db.from(schema).insert({ key: 'key-1', value: 'value-1' })
+      await db
+        .from(schema)
+        .insert({ id: undefined, key: 'key-1', value: 'value-1' })
       await db.rollback()
     })
 

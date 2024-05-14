@@ -28,7 +28,7 @@ export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
       : new QueryFind(this.query, this.schema, condition)
   }
 
-  public insert(value: Partial<TypeOf<P>>): QueryInsert<P> {
+  public insert(value: TypeOf<P>): QueryInsert<P> {
     return new QueryInsert(this.query, this.schema, value)
   }
 
@@ -266,7 +266,7 @@ export class QueryInsert<
   public constructor(
     builder: Knex.QueryBuilder,
     schema: ObjectSchema<P>,
-    private readonly value: Partial<TypeOf<P>>,
+    private readonly value: TypeOf<P>,
   ) {
     super(builder, schema)
   }

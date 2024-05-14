@@ -86,7 +86,7 @@ describe('Query', () => {
     await db.connection().from(tableName).truncate()
 
     const schema = base.set('table', tableName)
-    await db.from(schema).insert({ key: 'key', value: 'value' })
+    await db.from(schema).insert({ id: undefined, key: 'key', value: 'value' })
 
     const result = await db.from(schema).find()
     expect(result).toHaveLength(1)
@@ -100,7 +100,7 @@ describe('Query', () => {
     await db.connection().from(tableName).truncate()
 
     const schema = base.set('table', tableName)
-    await db.from(schema).insert({ key: 'key', value: 'value' })
+    await db.from(schema).insert({ id: undefined, key: 'key', value: 'value' })
 
     await db.from(schema).save({ id: 1, key: 'key-u', value: 'value-u' })
 
