@@ -53,6 +53,20 @@ export class TableMetadata {
   public get columns(): ColumnMetadata[] {
     return this.baseColumns.concat(...this.relationColumns)
   }
+
+  public get baseSchema(): ObjectSchema<AnyRecord<Schema>> {
+    return ObjectSchema.create(
+      Object.fromEntries(this.baseColumns.map((col) => [col.name, col.schema])),
+    )
+  }
+
+  public get relationSchema(): ObjectSchema<AnyRecord<Schema>> {
+    return ObjectSchema.create(
+      Object.fromEntries(
+        this.relationColumns.map((col) => [col.name, col.schema]),
+      ),
+    )
+  }
 }
 
 export class ColumnMetadata {
