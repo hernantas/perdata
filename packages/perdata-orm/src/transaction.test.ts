@@ -27,7 +27,7 @@ describe('Transaction', () => {
       await db.commit()
     })
 
-    const result = await db.from(schema).select()
+    const result = await db.from(schema).find()
     expect(result).toHaveLength(1)
     expect(result[0]).toHaveProperty('id')
     expect(result[0]).toHaveProperty('key', 'key-1')
@@ -43,7 +43,7 @@ describe('Transaction', () => {
       await db.rollback()
     })
 
-    const result = await db.from(schema).select()
+    const result = await db.from(schema).find()
     expect(result).toHaveLength(0)
   })
 

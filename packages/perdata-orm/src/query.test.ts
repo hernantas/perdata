@@ -37,7 +37,7 @@ describe('Query', () => {
 
     it('Should be able to select all from db table', async () => {
       const schema = base.set('table', tableName)
-      const result = await db.from(schema).select()
+      const result = await db.from(schema).find()
       expect(result).toHaveLength(10)
       expect(result[0]).toHaveProperty('id')
       expect(result[0]).toHaveProperty('key')
@@ -46,7 +46,7 @@ describe('Query', () => {
 
     it('Should be able to select all from db table', async () => {
       const schema = base.set('table', tableName)
-      const result = await db.from(schema).select('id')
+      const result = await db.from(schema).find().select('id')
       expect(result[0]).toHaveProperty('id')
       expect(result[0]).not.toHaveProperty('key')
       expect(result[0]).not.toHaveProperty('value')
@@ -54,19 +54,19 @@ describe('Query', () => {
 
     it('Should be able to select with limit from db table', async () => {
       const schema = base.set('table', tableName)
-      const result = await db.from(schema).select().limit(1)
+      const result = await db.from(schema).find().limit(1)
       expect(result).toHaveLength(1)
     })
 
     it('Should be able to select with offset from db table', async () => {
       const schema = base.set('table', tableName)
-      const result = await db.from(schema).select().limit(1).offset(2)
+      const result = await db.from(schema).find().limit(1).offset(2)
       expect(result).toHaveLength(1)
     })
 
     it('Should be able to select with filter from db table', async () => {
       const schema = base.set('table', tableName)
-      const result = await db.from(schema).select().filter(eq('id', 1))
+      const result = await db.from(schema).find().filter(eq('id', 1))
       expect(result).toHaveLength(1)
     })
 
@@ -74,7 +74,7 @@ describe('Query', () => {
       const schema = base.set('table', tableName)
       const query = db
         .from(schema)
-        .select()
+        .find()
         .filter(or(eq('id', 1), eq('id', 2)))
       const result = await query
       expect(result).toHaveLength(2)
@@ -88,7 +88,7 @@ describe('Query', () => {
     const schema = base.set('table', tableName)
     await db.from(schema).insert({ key: 'key', value: 'value' })
 
-    const result = await db.from(schema).select()
+    const result = await db.from(schema).find()
     expect(result).toHaveLength(1)
     expect(result[0]).toHaveProperty('id')
     expect(result[0]).toHaveProperty('key', 'key')
@@ -107,7 +107,7 @@ describe('Query', () => {
       .update({ key: 'key-u', value: 'value-u' })
       .where(eq('id', 1))
 
-    const result = await db.from(schema).select()
+    const result = await db.from(schema).find()
     expect(result).toHaveLength(1)
     expect(result[0]).toHaveProperty('id')
     expect(result[0]).toHaveProperty('key', 'key-u')

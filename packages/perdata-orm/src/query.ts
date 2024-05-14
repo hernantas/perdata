@@ -20,20 +20,12 @@ export class QueryTable<P extends AnyRecord<Schema>> extends Query {
     super(query)
   }
 
-  public select(): QuerySelect<P>
-  public select<K extends keyof P>(...keys: K[]): QuerySelect<Pick<P, K>>
-  public select<K extends keyof P>(
-    ...keys: K[]
-  ): QuerySelect<P> | QuerySelect<Pick<P, K>> {
-    return keys.length === 0
-      ? new QuerySelect(this.query, this.schema)
-      : new QuerySelect(
-          this.query,
-          this.schema
-            .pick(...keys)
-            .set('entity', this.schema.get('entity'))
-            .set('table', this.schema.get('table')),
-        )
+  public find<K extends keyof P>(
+    condition?: QueryFilter<P, K> | QueryFilterGroup<P>,
+  ): QueryFind<P> {
+    return condition !== undefined
+      ? new QueryFind(this.query, this.schema)
+      : new QueryFind(this.query, this.schema, condition)
   }
 
   public insert(value: Partial<TypeOf<P>>): QueryInsert<P> {
@@ -59,20 +51,18 @@ export abstract class QueryExecutable<P extends AnyRecord<Schema>>
   }
 }
 
-export class QuerySelect<
-  P extends AnyRecord<Schema>,
-> extends QueryExecutable<P> {
+export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
   public constructor(
-    builder: Knex.QueryBuilder,
+    query: Knex.QueryBuilder,
     schema: ObjectSchema<P>,
-    private readonly condition?: QueryFilterGroup<P>,
+    private readonly condition?: QueryFilterGroup<P> | undefined,
     private readonly limitCount?: number,
     private readonly offsetCount?: number,
   ) {
-    super(builder, schema)
+    super(query, schema)
   }
 
-  public async run(): Promise<TypeOf<P>[]> {
+  public override async run(): Promise<TypeOf<P>[]> {
     const table = new TableMetadata(this.schema)
 
     let query = this.query
@@ -95,8 +85,18 @@ export class QuerySelect<
     return this.schema.array().decode(result)
   }
 
-  public limit(count: number): QuerySelect<P> {
-    return new QuerySelect(
+  public select<K extends keyof P>(...keys: K[]): QueryFind<Pick<P, K>> {
+    return new QueryFind(
+      this.query,
+      this.schema
+        .pick(...keys)
+        .set('entity', this.schema.get('entity'))
+        .set('table', this.schema.get('table')),
+    )
+  }
+
+  public limit(count: number): QueryFind<P> {
+    return new QueryFind(
       this.query,
       this.schema,
       this.condition,
@@ -105,8 +105,8 @@ export class QuerySelect<
     )
   }
 
-  public offset(count: number): QuerySelect<P> {
-    return new QuerySelect(
+  public offset(count: number): QueryFind<P> {
+    return new QueryFind(
       this.query,
       this.schema,
       this.condition,
@@ -117,8 +117,8 @@ export class QuerySelect<
 
   public filter<K extends keyof P>(
     condition: QueryFilter<P, K> | QueryFilterGroup<P>,
-  ): QuerySelect<P> {
-    return new QuerySelect(
+  ): QueryFind<P> {
+    return new QueryFind(
       this.query,
       this.schema,
       and(condition),
