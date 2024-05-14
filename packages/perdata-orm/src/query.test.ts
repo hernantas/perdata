@@ -96,16 +96,13 @@ describe('Query', () => {
   })
 
   it('Should be able to update elements', async () => {
-    const tableName = 'simple_update'
+    const tableName = 'simple_save'
     await db.connection().from(tableName).truncate()
 
     const schema = base.set('table', tableName)
     await db.from(schema).insert({ key: 'key', value: 'value' })
 
-    await db
-      .from(schema)
-      .update({ key: 'key-u', value: 'value-u' })
-      .where(eq('id', 1))
+    await db.from(schema).save({ id: 1, key: 'key-u', value: 'value-u' })
 
     const result = await db.from(schema).find()
     expect(result).toHaveLength(1)

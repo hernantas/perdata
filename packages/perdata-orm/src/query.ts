@@ -32,8 +32,8 @@ export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
     return new QueryInsert(this.query, this.schema, value)
   }
 
-  public update(value: Partial<TypeOf<P>>): QueryUpdate<P> {
-    return new QueryUpdate(this.query, this.schema, value)
+  public save(value: Partial<TypeOf<P>>): QuerySave<P> {
+    return new QuerySave(this.query, this.schema, value)
   }
 }
 
@@ -282,37 +282,34 @@ export class QueryInsert<
   }
 }
 
-export class QueryUpdate<
-  P extends AnyRecord<Schema>,
-> extends QueryExecutable<P> {
+export class QuerySave<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
   public constructor(
-    builder: Knex.QueryBuilder,
+    query: Knex.QueryBuilder,
     schema: ObjectSchema<P>,
     private readonly value: Partial<TypeOf<P>>,
-    private readonly condition?: QueryFilterGroup<P>,
   ) {
-    super(builder, schema)
+    super(query, schema)
   }
 
   public override async run(): Promise<TypeOf<P>[]> {
     const table = new TableMetadata(this.schema)
-    const keys = Object.keys(this.value)
+
+    if (!Object.hasOwn(this.value, table.id.name)) {
+      throw new Error(`Must specify "${table.id.name}" id property`)
+    }
+
+    const id = this.value[table.id.name]
+    const keys = table.baseColumns
+      .filter((col) => !col.id)
+      .filter((col) => Object.hasOwn(this.value, col.name))
+      .map((col) => col.name)
     let query = this.query
       .from(table.name)
       .update(this.schema.pick(...keys).encode(this.value as TypeOf<P>))
+      .where(table.id.name, id)
       .returning(table.columns.map((column) => column.name))
-
-    if (this.condition !== undefined) {
-      query = buildFilter(query, this.condition)
-    }
 
     const result = await query
     return this.schema.array().decode(result)
-  }
-
-  public where<K extends keyof P>(
-    condition: QueryFilter<P, K> | QueryFilterGroup<P>,
-  ): QueryUpdate<P> {
-    return new QueryUpdate(this.query, this.schema, this.value, and(condition))
   }
 }
