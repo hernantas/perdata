@@ -8,7 +8,7 @@ export class Query {
   public from<P extends AnyRecord<Schema>>(
     schema: ObjectSchema<P>,
   ): QueryCollection<P> {
-    return new QueryCollection(this.query, schema)
+    return new QueryCollection(this.query.clone(), schema)
   }
 }
 
