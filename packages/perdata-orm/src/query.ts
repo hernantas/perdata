@@ -21,7 +21,10 @@ export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
   }
 
   public find<K extends keyof P>(
-    condition?: QueryFilter<P, K> | QueryFilterGroup<P>,
+    condition?:
+      | QueryFilter<P, K>
+      | QueryFilterMultiple<P, K>
+      | QueryFilterGroup<P>,
   ): QueryFind<P> {
     return condition !== undefined
       ? new QueryFind(this.query, this.schema)
@@ -67,7 +70,7 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
 
     let query = this.query
       .from(table.name)
-      .select(...table.columns.map((column) => column.name))
+      .select(...table.baseColumns.map((column) => column.name))
 
     if (this.condition !== undefined) {
       query = buildFilter(query, this.condition)
@@ -159,6 +162,9 @@ function buildFilter<P extends AnyRecord<Schema>>(
         case 'lte':
           query = query.orWhere(condition.key, '<=', condition.value)
           break
+        case 'in':
+          query = query.orWhereIn(condition.key, condition.values)
+          break
       }
     }
   } else if (group.operator === 'and') {
@@ -187,6 +193,9 @@ function buildFilter<P extends AnyRecord<Schema>>(
           break
         case 'lte':
           query = query.andWhere(condition.key, '<=', condition.value)
+          break
+        case 'in':
+          query = query.whereIn(condition.key, condition.values)
           break
       }
     }
@@ -243,9 +252,29 @@ export function lte<P extends AnyRecord<Schema>, K extends keyof P>(
   return { key, operator: 'lte', value }
 }
 
+export interface QueryFilterMultiple<
+  P extends AnyRecord<Schema>,
+  K extends keyof P,
+> {
+  readonly operator: 'in'
+  readonly key: K
+  readonly values: TypeOf<P[K]>[]
+}
+
+export function includes<P extends AnyRecord<Schema>, K extends keyof P>(
+  key: K,
+  values: TypeOf<P[K]>[],
+): QueryFilterMultiple<P, K> {
+  return { key, operator: 'in', values }
+}
+
 export interface QueryFilterGroup<P extends AnyRecord<Schema>> {
   readonly operator: 'and' | 'or'
-  readonly conditions: (QueryFilter<P, keyof P> | QueryFilterGroup<P>)[]
+  readonly conditions: (
+    | QueryFilter<P, keyof P>
+    | QueryFilterMultiple<P, keyof P>
+    | QueryFilterGroup<P>
+  )[]
 }
 
 export function and<P extends AnyRecord<Schema>>(
