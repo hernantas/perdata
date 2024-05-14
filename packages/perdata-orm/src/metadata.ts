@@ -135,7 +135,7 @@ export class RelationColumnMetadata
           targetColumn.schema,
           false,
         )
-        table.baseColumns.push(newColumn)
+        ownerTable.baseColumns.push(newColumn)
         return newColumn
       })()
 
