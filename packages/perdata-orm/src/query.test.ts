@@ -111,5 +111,81 @@ describe('Query', () => {
     expect(result[0]).toHaveProperty('value', 'value-u')
   })
 
+  describe('Relation', () => {
+    it('Should also resolve one-to-one relations', async () => {
+      const foreignName = 'relation_one_to_one_source_2'
+      await db.connection().from(foreignName).truncate()
+      await Promise.all(
+        [...Array(10).keys()].map((number) =>
+          db
+            .connection()
+            .from(foreignName)
+            .insert({ key: `key-${number}`, value: `value-${number}` }),
+        ),
+      )
+
+      const sourceName = 'relation_one_to_one_source_1'
+      await db.connection().from(sourceName).truncate()
+      await Promise.all(
+        [...Array(10).keys()].map((number) =>
+          db
+            .connection()
+            .from(sourceName)
+            .insert({
+              key: `key-${number}`,
+              value: `value-${number}`,
+              relation_one_to_one_source_2_id: number + 1,
+            }),
+        ),
+      )
+
+      const schemaForeign = base.set('table', foreignName)
+      const schemaSource = object({
+        ...base.properties,
+        relation: schemaForeign,
+      }).set('table', sourceName)
+
+      const result = await db.from(schemaSource).find()
+      expect(result).toHaveLength(10)
+    })
+
+    it('Should also resolve one-to-many relations', async () => {
+      const sourceName = 'relation_one_to_many_1'
+      await db.connection().from(sourceName).truncate()
+      await Promise.all(
+        [...Array(10).keys()].map((number) =>
+          db
+            .connection()
+            .from(sourceName)
+            .insert({ key: `key-${number}`, value: `value-${number}` }),
+        ),
+      )
+
+      const foreignName = 'relation_one_to_many_2'
+      await db.connection().from(foreignName).truncate()
+      await Promise.all(
+        [...Array(10).keys()].map((number) =>
+          db
+            .connection()
+            .from(foreignName)
+            .insert({
+              key: `key-${number}`,
+              value: `value-${number}`,
+              relation_one_to_many_1_id: number + 1,
+            }),
+        ),
+      )
+
+      const schemaForeign = base.set('table', foreignName)
+      const schemaSource = object({
+        ...base.properties,
+        relation: schemaForeign.array(),
+      }).set('table', sourceName)
+
+      const result = await db.from(schemaSource).find()
+      expect(result).toHaveLength(10)
+    })
+  })
+
   afterAll(() => db.close())
 })

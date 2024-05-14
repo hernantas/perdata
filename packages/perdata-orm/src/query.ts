@@ -94,8 +94,31 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
       query = query.offset(this.offsetCount)
     }
 
-    const result = await query
-    return table.baseSchema.array().decode(result) as TypeOf<P>[]
+    const rows = table.baseSchema.array().decode(await query)
+
+    // resolve relations
+    await Promise.all(
+      table.relationColumns.map(async (column) => {
+        const lookups = rows.map((row) => row[column.sourceColumn.name])
+        const foreignRows = await this.from(
+          column.foreignColumn.table.schema,
+        ).find(includes(column.foreignColumn.name, lookups))
+
+        rows.forEach((row) => {
+          const relationValues = foreignRows.filter((foreignRow) => {
+            return (
+              row[column.sourceColumn.name] ===
+              foreignRow[column.foreignColumn.name]
+            )
+          })
+          row[column.name] = column.collection
+            ? relationValues
+            : relationValues[0]
+        })
+      }),
+    )
+
+    return this.schema.array().decode(rows)
   }
 
   public select<K extends keyof P>(...keys: K[]): QueryFind<Pick<P, K>> {
