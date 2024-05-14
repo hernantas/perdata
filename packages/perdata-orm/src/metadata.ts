@@ -7,6 +7,7 @@ import {
   Schema,
   bool,
   literal,
+  object,
   string,
   union,
 } from 'pertype'
@@ -56,13 +57,13 @@ export class TableMetadata {
   }
 
   public get baseSchema(): ObjectSchema<AnyRecord<Schema>> {
-    return ObjectSchema.create(
+    return object(
       Object.fromEntries(this.baseColumns.map((col) => [col.name, col.schema])),
     ).set('entity', this.name)
   }
 
   public get relationSchema(): ObjectSchema<AnyRecord<Schema>> {
-    return ObjectSchema.create(
+    return object(
       Object.fromEntries(
         this.relationColumns.map((col) => [col.name, col.schema]),
       ),
