@@ -91,6 +91,19 @@ describe('TableMetadata', () => {
       collection: true,
     })
   })
+
+  describe('RelationColumnMetadata', () => {
+    const relationSchema = base.set('entity', 'relation_name')
+    const schema = object({
+      id: base.props.id,
+      key: string(),
+      value: string().optional(),
+      rel: relationSchema,
+    }).set('entity', 'table_name')
+    const table = new TableMetadata(schema)
+
+    expect(table.columns).toHaveLength(5)
+  })
 })
 
 function testColumn({

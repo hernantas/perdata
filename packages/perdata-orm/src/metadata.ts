@@ -6,25 +6,52 @@ import {
   OptionalSchema,
   Schema,
   bool,
+  literal,
   string,
+  union,
 } from 'pertype'
 import { SchemaReader } from './util/reader'
 
 export class TableMetadata {
   public readonly name: string
-
-  public readonly columns: ColumnMetadata[]
+  public readonly id: ColumnMetadata
+  public readonly baseColumns: ColumnMetadata[] = []
+  public readonly relationColumns: RelationColumnMetadata[] = []
 
   public constructor(public readonly schema: Schema) {
-    this.name = readEntity(schema)
+    const name = readEntity(schema)
+    if (name === undefined) {
+      throw new Error(
+        'Cannot read "entity" or "table" name metadata from Schema',
+      )
+    }
+    this.name = name
+
     const props = readProperties(schema)
-    this.columns = Object.entries(props).map(
-      ([key, schema]) => new ColumnMetadata(this, key, schema, true),
-    )
+    for (const [key, schema] of Object.entries(props)) {
+      const relation = readEntity(schema)
+      if (relation === undefined) {
+        const newColumn = new ColumnMetadata(this, key, schema, true)
+        this.baseColumns.push(newColumn)
+      } else {
+        const newColumn = new RelationColumnMetadata(this, key, schema, true)
+        this.relationColumns.push(newColumn)
+      }
+    }
+
+    const id = this.baseColumns.find((column) => column.id)
+    if (id === undefined) {
+      throw new Error('Entity must have "id" or "primary" column')
+    }
+    this.id = id
   }
 
   public column(name: string): ColumnMetadata | undefined {
     return this.columns.find((column) => column.name === name)
+  }
+
+  public get columns(): ColumnMetadata[] {
+    return this.baseColumns.concat(...this.relationColumns)
   }
 }
 
@@ -55,6 +82,61 @@ export class ColumnMetadata {
   }
 }
 
+export class RelationColumnMetadata
+  extends ColumnMetadata
+  implements RelationMetadata
+{
+  public readonly owner: 'source' | 'foreign'
+  public readonly sourceColumn: ColumnMetadata
+  public readonly foreignColumn: ColumnMetadata
+
+  public constructor(
+    table: TableMetadata,
+    name: string,
+    schema: Schema,
+    declared: boolean,
+  ) {
+    super(table, name, schema, declared)
+
+    const sourceTable = this.table
+    const foreignTable = new TableMetadata(schema)
+
+    this.owner = this.collection ? 'foreign' : readJoinOwner(schema)
+
+    const targetTable = this.owner === 'source' ? foreignTable : sourceTable
+    const targetColumn = targetTable.id
+
+    const joinColumnName =
+      readJoinName(schema) ?? `${targetTable.name}_${targetColumn.name}`
+
+    const ownerTable = this.owner === 'source' ? sourceTable : foreignTable
+    const ownerColumn =
+      ownerTable.column(joinColumnName) ??
+      (() => {
+        const newColumn = new ColumnMetadata(
+          ownerTable,
+          joinColumnName,
+          schema.set('id', false).set('generated', false),
+          false,
+        )
+        table.baseColumns.push(newColumn)
+        return newColumn
+      })()
+
+    this.sourceColumn = this.owner === 'source' ? ownerColumn : targetColumn
+    this.foreignColumn = this.owner === 'source' ? targetColumn : ownerColumn
+  }
+}
+
+export interface RelationMetadata {
+  /** Owner of join column */
+  readonly owner: 'source' | 'foreign'
+  /** Column used as join column in source table */
+  readonly sourceColumn: ColumnMetadata
+  /** Column used as join column in foreign table */
+  readonly foreignColumn: ColumnMetadata
+}
+
 function readProperties(schema: Schema): AnyRecord<Schema> {
   return (
     SchemaReader.traverse<AnyRecord<Schema> | undefined>(
@@ -67,14 +149,11 @@ function readProperties(schema: Schema): AnyRecord<Schema> {
   )
 }
 
-function readEntity(schema: Schema): string {
-  const name =
+function readEntity(schema: Schema): string | undefined {
+  return (
     SchemaReader.read(schema, 'entity', string().optional()) ??
     SchemaReader.read(schema, 'table', string().optional())
-  if (name !== undefined) {
-    return name
-  }
-  throw new Error('Cannot read "entity" or "table" name metadata from Schema')
+  )
 }
 
 function readId(schema: Schema): boolean {
@@ -106,5 +185,23 @@ function detectCollection(schema: Schema): boolean {
       (schema, innerValue) => schema instanceof ArraySchema || innerValue,
       schema,
     ) ?? false
+  )
+}
+
+function readJoinOwner(schema: Schema): 'source' | 'foreign' {
+  const options = union(literal('source'), literal('foreign')).optional()
+  return (
+    (SchemaReader.read(schema, 'owner', options) ||
+      SchemaReader.read(schema, 'joinOwner', options) ||
+      SchemaReader.read(schema, 'join_owner', options)) ??
+    'source'
+  )
+}
+
+function readJoinName(schema: Schema): string | undefined {
+  return (
+    SchemaReader.read(schema, 'joinName', string().optional()) ||
+    SchemaReader.read(schema, 'join_name', string().optional()) ||
+    SchemaReader.read(schema, 'join', string().optional())
   )
 }

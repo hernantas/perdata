@@ -23,3 +23,26 @@ export function generate(
 ): BuilderPlugin<Schema, Schema> {
   return (schema) => schema.set('generated', boolean)
 }
+
+export interface RelationOptions {
+  readonly owner?: 'source' | 'foreign'
+  readonly name?: string
+  readonly reference?: string
+}
+
+export function relation(
+  options: RelationOptions,
+): BuilderPlugin<Schema, Schema> {
+  return (schema) => {
+    if (options.owner !== undefined) {
+      schema = schema.set('joinOwner', options.owner)
+    }
+    if (options.name !== undefined) {
+      schema = schema.set('joinName', options.name)
+    }
+    if (options.reference !== undefined) {
+      schema = schema.set('joinReference', options.reference)
+    }
+    return schema
+  }
+}
