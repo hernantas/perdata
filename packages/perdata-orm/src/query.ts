@@ -7,12 +7,12 @@ export class Query {
 
   public from<P extends AnyRecord<Schema>>(
     schema: ObjectSchema<P>,
-  ): QueryTable<P> {
-    return new QueryTable(this.query, schema)
+  ): QueryCollection<P> {
+    return new QueryCollection(this.query, schema)
   }
 }
 
-export class QueryTable<P extends AnyRecord<Schema>> extends Query {
+export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
   public constructor(
     query: Knex.QueryBuilder,
     protected readonly schema: ObjectSchema<P>,
@@ -38,7 +38,7 @@ export class QueryTable<P extends AnyRecord<Schema>> extends Query {
 }
 
 export abstract class QueryExecutable<P extends AnyRecord<Schema>>
-  extends QueryTable<P>
+  extends QueryCollection<P>
   implements PromiseLike<TypeOf<P>[]>
 {
   public abstract run(): Promise<TypeOf<P>[]>

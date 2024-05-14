@@ -1,6 +1,6 @@
 import { Knex, knex } from 'knex'
 import { AnyRecord, ObjectSchema, Schema } from 'pertype'
-import { Query, QueryTable } from './query'
+import { Query, QueryCollection } from './query'
 import { Transaction } from './transaction'
 
 export interface DataSourceConfig {
@@ -46,7 +46,7 @@ export class DataSource {
 
   public from<P extends AnyRecord<Schema>>(
     schema: ObjectSchema<P>,
-  ): QueryTable<P> {
+  ): QueryCollection<P> {
     return new Query(this.instance.queryBuilder()).from(schema)
   }
 
