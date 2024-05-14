@@ -82,7 +82,7 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
     }
 
     const result = await query
-    return this.schema.array().decode(result)
+    return table.baseSchema.array().decode(result) as TypeOf<P>[]
   }
 
   public select<K extends keyof P>(...keys: K[]): QueryFind<Pick<P, K>> {
@@ -278,7 +278,7 @@ export class QueryInsert<
       .from(table.name)
       .insert(this.schema.pick(...keys).encode(this.value as TypeOf<P>))
       .returning(table.columns.map((column) => column.name))
-    return this.schema.array().decode(result)
+    return table.baseSchema.array().decode(result) as TypeOf<P>[]
   }
 }
 
@@ -310,6 +310,6 @@ export class QuerySave<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
       .returning(table.columns.map((column) => column.name))
 
     const result = await query
-    return this.schema.array().decode(result)
+    return table.baseSchema.array().decode(result) as TypeOf<P>[]
   }
 }
