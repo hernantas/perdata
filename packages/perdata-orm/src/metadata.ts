@@ -14,7 +14,6 @@ import { SchemaReader } from './util/reader'
 
 export class TableMetadata {
   public readonly name: string
-  public readonly id: ColumnMetadata
   public readonly baseColumns: ColumnMetadata[] = []
   public readonly relationColumns: RelationColumnMetadata[] = []
 
@@ -38,12 +37,6 @@ export class TableMetadata {
         this.relationColumns.push(newColumn)
       }
     }
-
-    const id = this.baseColumns.find((column) => column.id)
-    if (id === undefined) {
-      throw new Error('Entity must have "id" or "primary" column')
-    }
-    this.id = id
   }
 
   public column(name: string): ColumnMetadata | undefined {
@@ -52,6 +45,14 @@ export class TableMetadata {
 
   public get columns(): ColumnMetadata[] {
     return this.baseColumns.concat(...this.relationColumns)
+  }
+
+  public get id(): ColumnMetadata {
+    const column = this.baseColumns.find((column) => column.id)
+    if (column !== undefined) {
+      return column
+    }
+    throw new Error('This table do not have id column declared')
   }
 
   public get baseSchema(): ObjectSchema<AnyRecord<Schema>> {
