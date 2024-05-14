@@ -8,17 +8,7 @@ export class Query {
   public from<P extends AnyRecord<Schema>>(
     schema: ObjectSchema<P>,
   ): QueryCollection<P> {
-    return new QueryCollection(
-      this.query
-        .clone()
-        .clearCounters()
-        .clearGroup()
-        .clearHaving()
-        .clearOrder()
-        .clearSelect()
-        .clearWhere(),
-      schema,
-    )
+    return new QueryCollection(this.query, schema)
   }
 }
 
@@ -79,6 +69,7 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
     const table = new TableMetadata(this.schema)
 
     let query = this.query
+      .clone()
       .from(table.name)
       .select(...table.baseColumns.map((column) => column.name))
 
@@ -337,6 +328,7 @@ export class QueryInsert<
     const table = new TableMetadata(this.schema)
     const keys = Object.keys(this.value)
     const result = await this.query
+      .clone()
       .from(table.name)
       .insert(this.schema.pick(...keys).encode(this.value as TypeOf<P>))
       .returning(table.baseColumns.map((column) => column.name))
@@ -366,6 +358,7 @@ export class QuerySave<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
       .filter((col) => Object.hasOwn(this.value, col.name))
       .map((col) => col.name)
     let query = this.query
+      .clone()
       .from(table.name)
       .update(this.schema.pick(...keys).encode(this.value as TypeOf<P>))
       .where(table.id.name, id)
