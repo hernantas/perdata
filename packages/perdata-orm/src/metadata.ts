@@ -58,7 +58,7 @@ export class TableMetadata {
   public get baseSchema(): ObjectSchema<AnyRecord<Schema>> {
     return ObjectSchema.create(
       Object.fromEntries(this.baseColumns.map((col) => [col.name, col.schema])),
-    )
+    ).set('entity', this.name)
   }
 
   public get relationSchema(): ObjectSchema<AnyRecord<Schema>> {
@@ -66,7 +66,7 @@ export class TableMetadata {
       Object.fromEntries(
         this.relationColumns.map((col) => [col.name, col.schema]),
       ),
-    )
+    ).set('entity', this.name)
   }
 }
 
