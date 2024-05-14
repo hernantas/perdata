@@ -18,8 +18,8 @@ export class TableMetadata {
   public readonly baseColumns: ColumnMetadata[] = []
   public readonly relationColumns: RelationColumnMetadata[] = []
 
-  public constructor(schema: Schema) {
-    const name = readEntity(schema)
+  public constructor(public readonly origin: Schema) {
+    const name = readEntity(origin)
     if (name === undefined) {
       throw new Error(
         'Cannot read "entity" or "table" name metadata from Schema',
@@ -27,7 +27,7 @@ export class TableMetadata {
     }
     this.name = name
 
-    const props = readProperties(schema)
+    const props = readProperties(origin)
     for (const [key, schema] of Object.entries(props)) {
       const relation = readEntity(schema)
       if (relation === undefined) {
