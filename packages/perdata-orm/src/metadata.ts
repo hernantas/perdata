@@ -18,7 +18,7 @@ export class TableMetadata {
   public readonly baseColumns: ColumnMetadata[] = []
   public readonly relationColumns: RelationColumnMetadata[] = []
 
-  public constructor(public readonly schema: Schema) {
+  public constructor(schema: Schema) {
     const name = readEntity(schema)
     if (name === undefined) {
       throw new Error(
@@ -67,6 +67,15 @@ export class TableMetadata {
       Object.fromEntries(
         this.relationColumns.map((col) => [col.name, col.schema]),
       ),
+    ).set('entity', this.name)
+  }
+
+  public get schema(): ObjectSchema<AnyRecord<Schema>> {
+    return object(
+      Object.fromEntries([
+        ...this.baseColumns.map((col) => [col.name, col.schema]),
+        ...this.relationColumns.map((col) => [col.name, col.schema]),
+      ]),
     ).set('entity', this.name)
   }
 }
