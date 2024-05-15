@@ -1,0 +1,75 @@
+import { BiMap } from './map'
+
+describe('Bi-Directional Map', () => {
+  it('Set by Key should binding both', () => {
+    const biMap: BiMap<number, string> = new BiMap()
+    biMap.setByKey(1, '1')
+    biMap.setByKey(2, '2')
+    expect(biMap.getByKey(1)).toBe('1')
+    expect(biMap.getByValue('1')).toBe(1)
+    expect(biMap.getByKey(2)).toBe('2')
+    expect(biMap.getByValue('2')).toBe(2)
+  })
+
+  it('Changing the value using "setByKey" should update the binding', () => {
+    const biMap: BiMap<number, string> = new BiMap()
+    biMap.setByKey(1, '1')
+    biMap.setByKey(1, '2')
+    biMap.setByKey(1, '3')
+    expect(biMap.hasByKey(1)).toBe(true)
+    expect(biMap.getByKey(1)).toBe('3')
+    expect(biMap.hasByValue('1')).toBe(false)
+    expect(biMap.hasByValue('2')).toBe(false)
+    expect(biMap.hasByValue('3')).toBe(true)
+    expect(biMap.getByValue('3')).toBe(1)
+  })
+
+  it('Changing the value by "setByKey" should update the binding', () => {
+    const biMap: BiMap<number, string> = new BiMap()
+    biMap.setByKey(1, '1')
+    biMap.setByKey(2, '1')
+    biMap.setByKey(3, '1')
+    expect(biMap.hasByKey(1)).toBe(false)
+    expect(biMap.hasByKey(2)).toBe(false)
+    expect(biMap.hasByKey(3)).toBe(true)
+    expect(biMap.getByKey(3)).toBe('1')
+    expect(biMap.hasByValue('1')).toBe(true)
+    expect(biMap.getByValue('1')).toBe(3)
+  })
+
+  it('Set by Value should binding both', () => {
+    const biMap: BiMap<number, string> = new BiMap()
+    biMap.setByValue('1', 1)
+    biMap.setByValue('2', 2)
+    expect(biMap.getByValue('1')).toBe(1)
+    expect(biMap.getByKey(1)).toBe('1')
+    expect(biMap.getByValue('2')).toBe(2)
+    expect(biMap.getByKey(2)).toBe('2')
+  })
+
+  it('Changing the value by "setByValue" should update the binding', () => {
+    const biMap: BiMap<number, string> = new BiMap()
+    biMap.setByValue('1', 1)
+    biMap.setByValue('2', 1)
+    biMap.setByValue('3', 1)
+    expect(biMap.hasByKey(1)).toBe(true)
+    expect(biMap.getByKey(1)).toBe('3')
+    expect(biMap.hasByValue('1')).toBe(false)
+    expect(biMap.hasByValue('2')).toBe(false)
+    expect(biMap.hasByValue('3')).toBe(true)
+    expect(biMap.getByValue('3')).toBe(1)
+  })
+
+  it('Changing the value by "setByValue" should update the binding', () => {
+    const biMap: BiMap<number, string> = new BiMap()
+    biMap.setByValue('1', 1)
+    biMap.setByValue('1', 2)
+    biMap.setByValue('1', 3)
+    expect(biMap.hasByKey(1)).toBe(false)
+    expect(biMap.hasByKey(2)).toBe(false)
+    expect(biMap.hasByKey(3)).toBe(true)
+    expect(biMap.getByKey(3)).toBe('1')
+    expect(biMap.hasByValue('1')).toBe(true)
+    expect(biMap.getByValue('1')).toBe(3)
+  })
+})
