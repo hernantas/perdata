@@ -44,13 +44,13 @@ export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
         )
   }
 
-  public insert(...values: TypeOf<P>[]): QueryInsert<P> {
+  public insert(value: TypeOf<P>): QueryInsert<P> {
     return new QueryInsert(
       this.query,
       this.metadata,
       this.entries,
       this.schema,
-      values,
+      value,
     )
   }
 
@@ -139,7 +139,9 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
       }),
     )
 
-    return this.schema.array().decode(entries.map((entry) => entry.value))
+    return this.schema
+      .array()
+      .decode(entries.map((entry) => entry.value)) as TypeOf<P>[]
   }
 
   public limit(count: number): QueryFind<P> {
@@ -347,7 +349,7 @@ export class QueryInsert<
     metadata: MetadataRegistry,
     entries: EntryRegistry,
     schema: ObjectSchema<P>,
-    private readonly values: TypeOf<P>[],
+    private readonly value: TypeOf<P>,
   ) {
     super(query, metadata, entries, schema)
   }
@@ -357,7 +359,7 @@ export class QueryInsert<
     const query = this.query
       .clone()
       .from(table.name)
-      .insert(this.schema.array().encode(this.values))
+      .insert(this.schema.encode(this.value))
       .returning(table.baseColumns.map((column) => column.name))
 
     const entries = table.baseSchema
@@ -374,16 +376,6 @@ export class QueryInsert<
         table.id.name,
         entries.map((entry) => entry.id.raw as TypeOf<P[string]>),
       ),
-    )
-  }
-
-  public override insert(...values: TypeOf<P>[]): QueryInsert<P> {
-    return new QueryInsert(
-      this.query,
-      this.metadata,
-      this.entries,
-      this.schema,
-      this.values.concat(...values),
     )
   }
 }
