@@ -154,6 +154,10 @@ export class RelationColumnMetadata
 
     this.type = readReference(schema)
   }
+
+  public get foreignTable(): TableMetadata {
+    return this.foreignColumn.table
+  }
 }
 
 export interface RelationMetadata {
