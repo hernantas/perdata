@@ -31,32 +31,37 @@ export class EntryRegistry {
 }
 
 export class Entry {
-  public readonly properties: EntryProperty[]
+  public readonly properties: EntryProperty[] = []
 
   public constructor(
-    registry: EntryRegistry,
+    private readonly registry: EntryRegistry,
     public readonly table: TableMetadata,
   ) {
-    this.properties = [
-      ...table.baseColumns.map(
-        (column) => new EntryPropertyValue(registry, this, column),
-      ),
-      ...table.relationColumns.map(
-        (column) => new EntryPropertyRelation(registry, this, column),
-      ),
-    ]
+    table.columns.forEach((column) => this.property(column))
   }
 
-  public property(column: ColumnMetadata): EntryProperty | undefined {
-    return this.properties.find((prop) => prop.column === column)
+  public property(column: ColumnMetadata): EntryProperty {
+    if (this.table !== column.table) {
+      throw new Error(
+        `Column "${column.table.name}"."${column.name}" is not exists within "${this.table.name}" table`,
+      )
+    }
+
+    const property = this.properties.find((prop) => prop.column === column)
+    if (property !== undefined) {
+      return property
+    }
+
+    const newProperty =
+      column instanceof RelationColumnMetadata
+        ? new EntryPropertyRelation(this.registry, this, column)
+        : new EntryPropertyValue(this.registry, this, column)
+    this.properties.push(newProperty)
+    return newProperty
   }
 
   public get id(): EntryProperty {
-    const id = this.property(this.table.id)
-    if (id !== undefined) {
-      return id
-    }
-    throw new Error(`Cannot get "${this.table.id.name}" id property`)
+    return this.property(this.table.id)
   }
 
   public get active(): boolean {
@@ -200,13 +205,13 @@ export class EntryPropertyRelation extends EntryProperty {
   }
 
   private get foreignEntries(): Entry[] {
-    const sourceProperty = this.entry.property(this.column.sourceColumn)!
+    const sourceProperty = this.entry.property(this.column.sourceColumn)
     return sourceProperty.value !== undefined
       ? this.registry
           .get(this.column.foreignTable)
           .filter(
             (foreignEntry) =>
-              foreignEntry.property(this.column.foreignColumn)!.value ===
+              foreignEntry.property(this.column.foreignColumn).value ===
               sourceProperty.value,
           )
       : []
@@ -220,7 +225,7 @@ export class EntryPropertyRelation extends EntryProperty {
   }
 
   public override set value(value: unknown) {
-    const sourceProperty = this.entry.property(this.column.sourceColumn)!
+    const sourceProperty = this.entry.property(this.column.sourceColumn)
 
     // update old foreign entries
     if (sourceProperty.value !== undefined) {
@@ -230,7 +235,7 @@ export class EntryPropertyRelation extends EntryProperty {
       } else {
         this.foreignEntries.forEach(
           (entry) =>
-            (entry.property(this.column.foreignColumn)!.value = undefined),
+            (entry.property(this.column.foreignColumn).value = undefined),
         )
       }
     }
@@ -249,11 +254,11 @@ export class EntryPropertyRelation extends EntryProperty {
 
             // linking
             if (this.column.owner === 'source') {
-              this.entry.property(this.column.sourceColumn)!.value =
-                foreignEntry.property(this.column.foreignColumn)!.value
+              this.entry.property(this.column.sourceColumn).value =
+                foreignEntry.property(this.column.foreignColumn).value
             } else {
-              foreignEntry.property(this.column.foreignColumn)!.value =
-                this.entry.property(this.column.sourceColumn)!.value
+              foreignEntry.property(this.column.foreignColumn).value =
+                this.entry.property(this.column.sourceColumn).value
             }
           })
       })

@@ -128,7 +128,7 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
     await Promise.all(
       this.metadata.relationColumns.map(async (column) => {
         const lookups = entries.map(
-          (entry) => entry.property(column.sourceColumn)!.raw,
+          (entry) => entry.property(column.sourceColumn).raw,
         )
         await this.from(
           column.foreignTable.origin as ObjectSchema<AnyRecord<Schema>>,
