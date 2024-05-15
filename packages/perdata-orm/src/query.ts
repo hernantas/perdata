@@ -355,12 +355,24 @@ export class QueryInsert<
       .clone()
       .from(this.metadata.name)
       .insert(this.schema.array().encode(this.values))
-      .returning(this.metadata.id.name)
-    const ids = this.metadata.id.origin
+      .returning(this.metadata.baseColumns.map((column) => column.name))
+
+    const entries = this.metadata.baseSchema
       .array()
-      .encode(this.metadata.id.origin.array().decode(await query))
+      .decode(await query)
+      .flatMap((row) =>
+        this.entries
+          .findById(this.metadata, row[this.metadata.id.name])
+          .map((entry) => {
+            entry.value = row
+            return entry
+          }),
+      )
     return await this.from(this.schema).find(
-      includes(this.metadata.id.name, ids),
+      includes(
+        this.metadata.id.name,
+        entries.map((entry) => entry.id.raw as TypeOf<P[string]>),
+      ),
     )
   }
 
