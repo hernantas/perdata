@@ -1,5 +1,5 @@
 import { Knex } from 'knex'
-import { AnyRecord, ObjectSchema, Schema, TypeOf } from 'pertype'
+import { AnyRecord, ObjectSchema, OptionalOf, Schema, TypeOf } from 'pertype'
 import { EntryRegistry } from './entry'
 import { MetadataRegistry } from './metadata'
 
@@ -44,7 +44,7 @@ export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
         )
   }
 
-  public insert(value: TypeOf<P>): QueryInsert<P> {
+  public insert(value: OptionalOf<TypeOf<P>>): QueryInsert<P> {
     return new QueryInsert(
       this.query,
       this.metadata,
@@ -54,7 +54,7 @@ export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
     )
   }
 
-  public save(value: Partial<TypeOf<P>>): QuerySave<P> {
+  public save(value: Partial<OptionalOf<TypeOf<P>>>): QuerySave<P> {
     return new QuerySave(
       this.query,
       this.metadata,
@@ -67,12 +67,12 @@ export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
 
 export abstract class QueryExecutable<P extends AnyRecord<Schema>>
   extends QueryCollection<P>
-  implements PromiseLike<TypeOf<P>[]>
+  implements PromiseLike<OptionalOf<TypeOf<P>>[]>
 {
-  public abstract run(): Promise<TypeOf<P>[]>
+  public abstract run(): Promise<OptionalOf<TypeOf<P>>[]>
 
-  public then<R = TypeOf<P>, RE = never>(
-    onfulfilled?: (value: TypeOf<P>[]) => R | PromiseLike<R>,
+  public then<R = OptionalOf<TypeOf<P>>, RE = never>(
+    onfulfilled?: (value: OptionalOf<TypeOf<P>>[]) => R | PromiseLike<R>,
     onrejected?: (reason: any) => RE | PromiseLike<RE>,
   ): PromiseLike<R | RE> {
     return this.run().then(onfulfilled, onrejected)
@@ -92,7 +92,7 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
     super(query, metadata, entries, schema)
   }
 
-  public override async run(): Promise<TypeOf<P>[]> {
+  public override async run(): Promise<OptionalOf<TypeOf<P>>[]> {
     const table = this.metadata.get(this.schema)
     let query = this.query
       .clone()
@@ -136,7 +136,7 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
 
     return this.schema
       .array()
-      .decode(entries.map((entry) => entry.value)) as TypeOf<P>[]
+      .decode(entries.map((entry) => entry.value)) as OptionalOf<TypeOf<P>>[]
   }
 
   public limit(count: number): QueryFind<P> {
@@ -344,12 +344,12 @@ export class QueryInsert<
     metadata: MetadataRegistry,
     entries: EntryRegistry,
     schema: ObjectSchema<P>,
-    private readonly value: TypeOf<P>,
+    private readonly value: OptionalOf<TypeOf<P>>,
   ) {
     super(query, metadata, entries, schema)
   }
 
-  public override async run(): Promise<TypeOf<P>[]> {
+  public override async run(): Promise<OptionalOf<TypeOf<P>>[]> {
     const table = this.metadata.get(this.schema)
     const entry = this.entries.create(table)
     entry.value = this.value
@@ -386,7 +386,7 @@ export class QuerySave<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
     super(query, metadata, entries, schema)
   }
 
-  public override async run(): Promise<TypeOf<P>[]> {
+  public override async run(): Promise<OptionalOf<TypeOf<P>>[]> {
     const table = this.metadata.get(this.schema)
     const id = this.value[table.id.name]
 
