@@ -31,8 +31,8 @@ export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
       : new QueryFind(this.query, this.schema, condition)
   }
 
-  public insert(value: TypeOf<P>): QueryInsert<P> {
-    return new QueryInsert(this.query, this.schema, value)
+  public insert(...values: TypeOf<P>[]): QueryInsert<P> {
+    return new QueryInsert(this.query, this.schema, values)
   }
 
   public save(value: Partial<TypeOf<P>>): QuerySave<P> {
@@ -317,22 +317,32 @@ export class QueryInsert<
   P extends AnyRecord<Schema>,
 > extends QueryExecutable<P> {
   public constructor(
-    builder: Knex.QueryBuilder,
+    query: Knex.QueryBuilder,
     schema: ObjectSchema<P>,
-    private readonly value: TypeOf<P>,
+    private readonly values: TypeOf<P>[],
   ) {
-    super(builder, schema)
+    super(query, schema)
   }
 
   public override async run(): Promise<TypeOf<P>[]> {
     const table = new TableMetadata(this.schema)
-    const keys = Object.keys(this.value)
-    const ids = await this.query
+    const query = this.query
       .clone()
       .from(table.name)
-      .insert(this.schema.pick(...keys).encode(this.value as TypeOf<P>))
+      .insert(this.schema.array().encode(this.values))
       .returning(table.id.name)
+    const ids = table.id.schema
+      .array()
+      .encode(table.id.schema.array().decode(await query))
     return await this.from(this.schema).find(includes(table.id.name, ids))
+  }
+
+  public override insert(...values: TypeOf<P>[]): QueryInsert<P> {
+    return new QueryInsert(
+      this.query,
+      this.schema,
+      this.values.concat(...values),
+    )
   }
 }
 
