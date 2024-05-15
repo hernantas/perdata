@@ -6,25 +6,25 @@ import { TableMetadata } from './metadata'
 export class Query {
   public constructor(
     protected readonly query: Knex.QueryBuilder,
-    protected readonly registry: EntryRegistry,
+    protected readonly entries: EntryRegistry,
   ) {}
 
   public from<P extends AnyRecord<Schema>>(
     schema: ObjectSchema<P>,
     metadata: TableMetadata = new TableMetadata(schema),
   ): QueryCollection<P> {
-    return new QueryCollection(this.query, this.registry, schema, metadata)
+    return new QueryCollection(this.query, this.entries, schema, metadata)
   }
 }
 
 export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
   public constructor(
     query: Knex.QueryBuilder,
-    registry: EntryRegistry,
+    entries: EntryRegistry,
     protected readonly schema: ObjectSchema<P>,
     protected readonly metadata: TableMetadata,
   ) {
-    super(query, registry)
+    super(query, entries)
   }
 
   public find<K extends keyof P>(
@@ -34,10 +34,10 @@ export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
       | QueryFilterGroup<P>,
   ): QueryFind<P> {
     return condition !== undefined
-      ? new QueryFind(this.query, this.registry, this.schema, this.metadata)
+      ? new QueryFind(this.query, this.entries, this.schema, this.metadata)
       : new QueryFind(
           this.query,
-          this.registry,
+          this.entries,
           this.schema,
           this.metadata,
           condition,
@@ -47,7 +47,7 @@ export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
   public insert(...values: TypeOf<P>[]): QueryInsert<P> {
     return new QueryInsert(
       this.query,
-      this.registry,
+      this.entries,
       this.schema,
       this.metadata,
 
@@ -58,7 +58,7 @@ export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
   public save(value: Partial<TypeOf<P>>): QuerySave<P> {
     return new QuerySave(
       this.query,
-      this.registry,
+      this.entries,
       this.schema,
       this.metadata,
 
@@ -84,14 +84,14 @@ export abstract class QueryExecutable<P extends AnyRecord<Schema>>
 export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
   public constructor(
     query: Knex.QueryBuilder,
-    registry: EntryRegistry,
+    entries: EntryRegistry,
     schema: ObjectSchema<P>,
     metadata: TableMetadata,
     private readonly condition?: QueryFilterGroup<P> | undefined,
     private readonly limitCount?: number,
     private readonly offsetCount?: number,
   ) {
-    super(query, registry, schema, metadata)
+    super(query, entries, schema, metadata)
   }
 
   public override async run(): Promise<TypeOf<P>[]> {
@@ -116,7 +116,7 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
       .array()
       .decode(await query)
       .flatMap((row) =>
-        this.registry
+        this.entries
           .findById(this.metadata, row[this.metadata.id.name])
           .map((entry) => {
             entry.value = row
@@ -143,7 +143,7 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
   public limit(count: number): QueryFind<P> {
     return new QueryFind(
       this.query,
-      this.registry,
+      this.entries,
       this.schema,
       this.metadata,
       this.condition,
@@ -155,7 +155,7 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
   public offset(count: number): QueryFind<P> {
     return new QueryFind(
       this.query,
-      this.registry,
+      this.entries,
       this.schema,
       this.metadata,
       this.condition,
@@ -169,7 +169,7 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
   ): QueryFind<P> {
     return new QueryFind(
       this.query,
-      this.registry,
+      this.entries,
       this.schema,
       this.metadata,
       and(condition),
@@ -342,12 +342,12 @@ export class QueryInsert<
 > extends QueryExecutable<P> {
   public constructor(
     query: Knex.QueryBuilder,
-    registry: EntryRegistry,
+    entries: EntryRegistry,
     schema: ObjectSchema<P>,
     metadata: TableMetadata,
     private readonly values: TypeOf<P>[],
   ) {
-    super(query, registry, schema, metadata)
+    super(query, entries, schema, metadata)
   }
 
   public override async run(): Promise<TypeOf<P>[]> {
@@ -366,7 +366,7 @@ export class QueryInsert<
   public override insert(...values: TypeOf<P>[]): QueryInsert<P> {
     return new QueryInsert(
       this.query,
-      this.registry,
+      this.entries,
       this.schema,
       this.metadata,
       this.values.concat(...values),
@@ -377,12 +377,12 @@ export class QueryInsert<
 export class QuerySave<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
   public constructor(
     query: Knex.QueryBuilder,
-    registry: EntryRegistry,
+    entries: EntryRegistry,
     schema: ObjectSchema<P>,
     metadata: TableMetadata,
     private readonly value: Partial<TypeOf<P>>,
   ) {
-    super(query, registry, schema, metadata)
+    super(query, entries, schema, metadata)
   }
 
   public override async run(): Promise<TypeOf<P>[]> {
