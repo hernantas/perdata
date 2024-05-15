@@ -249,7 +249,7 @@ export class EntryPropertyRelation extends EntryProperty {
       values.forEach((value) => {
         const lookupValue = value[this.column.foreignTable.id.name]
         this.registry
-          .findById(this.column.table, lookupValue)
+          .findById(this.column.foreignTable, lookupValue)
           .forEach((foreignEntry) => {
             // apply changes
             if (this.column.type === 'strong') {
