@@ -17,14 +17,16 @@ export class EntryRegistry {
     return this.storage.get(table)
   }
 
-  public findById(table: TableMetadata, id: unknown): Entry[] {
-    const entries = this.get(table).filter((entry) => entry.id.value === id)
-    if (entries.length === 0) {
-      const newEntry = this.create(table)
-      newEntry.id.value = id
-      entries.push(newEntry)
+  public findById(table: TableMetadata, id: unknown): Entry {
+    const entry = this.get(table).find((entry) => entry.id.value === id)
+    if (entry !== undefined) {
+      return entry
     }
-    return entries
+
+    const newEntry = this.create(table)
+    newEntry.id.value = id
+    this.get(table).push(newEntry)
+    return newEntry
   }
 
   public create(table: TableMetadata): Entry {
@@ -200,6 +202,8 @@ export class EntryPropertyValue extends EntryProperty {
 }
 
 export class EntryPropertyRelation extends EntryProperty {
+  private data: Entry | Entry[] | undefined
+
   public constructor(
     registry: EntryRegistry,
     entry: Entry,
@@ -208,64 +212,53 @@ export class EntryPropertyRelation extends EntryProperty {
     super(registry, entry)
   }
 
-  private get foreignEntries(): Entry[] {
-    const sourceProperty = this.entry.property(this.column.sourceColumn)
-    return sourceProperty.value !== undefined
-      ? this.registry
-          .get(this.column.foreignTable)
-          .filter(
-            (foreignEntry) =>
-              foreignEntry.property(this.column.foreignColumn).value ===
-              sourceProperty.value,
-          )
-      : []
+  private get entries(): Entry[] {
+    return Array.isArray(this.data)
+      ? this.data
+      : this.data !== undefined
+        ? [this.data]
+        : []
   }
 
   public override get value(): unknown {
-    const entries = this.foreignEntries
-    return this.column.collection
-      ? entries.map((entry) => entry.value)
-      : entries[0]?.value
+    return Array.isArray(this.data)
+      ? this.data.map((entry) => entry.value)
+      : this.data !== undefined
+        ? this.data.value
+        : undefined
   }
 
   public override set value(value: unknown) {
-    const sourceProperty = this.entry.property(this.column.sourceColumn)
-
-    // update old foreign entries
-    if (sourceProperty.value !== undefined) {
-      // unlink the data
-      if (this.column.owner === 'source') {
-        sourceProperty.value = undefined
-      } else {
-        this.foreignEntries.forEach(
-          (entry) =>
-            (entry.property(this.column.foreignColumn).value = undefined),
-        )
-      }
+    // unlink old foreign entries
+    if (this.column.owner === 'source') {
+      this.entry.property(this.column.sourceColumn).value = undefined
+    } else {
+      this.entries.forEach(
+        (entry) =>
+          (entry.property(this.column.foreignColumn).value = undefined),
+      )
     }
 
-    if (value !== undefined) {
-      const values = Array.isArray(value) ? value : [value]
-      values.forEach((value) => {
-        const lookupValue = value[this.column.foreignTable.id.name]
-        this.registry
-          .findById(this.column.foreignTable, lookupValue)
-          .forEach((foreignEntry) => {
-            // apply changes
-            if (this.column.type === 'strong') {
-              foreignEntry.value = value
-            }
+    if (Array.isArray(value)) {
+      throw new Error('Not Implemented yet')
+    } else {
+      const row = this.column.foreignTable.schema.decode(value)
+      const id = row[this.column.foreignTable.id.name]
+      const foreignEntry = this.registry.findById(this.column.foreignTable, id)
+      this.data = foreignEntry
 
-            // linking
-            if (this.column.owner === 'source') {
-              this.entry.property(this.column.sourceColumn).value =
-                foreignEntry.property(this.column.foreignColumn).value
-            } else {
-              foreignEntry.property(this.column.foreignColumn).value =
-                this.entry.property(this.column.sourceColumn).value
-            }
-          })
-      })
+      if (this.column.type === 'strong') {
+        foreignEntry.value = row
+      }
+
+      // linking
+      if (this.column.owner === 'source') {
+        this.entry.property(this.column.sourceColumn).value =
+          foreignEntry.property(this.column.foreignColumn).value
+      } else {
+        foreignEntry.property(this.column.foreignColumn).value =
+          this.entry.property(this.column.sourceColumn).value
+      }
     }
   }
 

@@ -115,16 +115,11 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
       .array()
       .decode(await query)
       .map((row) => {
-        const entries = this.entries
-          .findById(table, row[table.id.name])
-          .map((entry) => {
-            entry.value = row
-            entry.dirty = false
-            entry.initialized = true
-            return entry
-          })
-        // guaranteed to have at least 1 elements
-        return entries[0]!
+        const entry = this.entries.findById(table, row[table.id.name])
+        entry.value = row
+        entry.dirty = false
+        entry.initialized = true
+        return entry
       })
 
     // resolve relations
@@ -356,26 +351,26 @@ export class QueryInsert<
 
   public override async run(): Promise<TypeOf<P>[]> {
     const table = this.metadata.get(this.schema)
+    const entry = this.entries.create(table)
+    entry.value = this.value
+    entry.id.value = undefined
+
     const query = this.query
       .clone()
       .from(table.name)
-      .insert(this.schema.encode(this.value))
+      .insert(table.baseSchema.encode(entry.value))
       .returning(table.baseColumns.map((column) => column.name))
 
-    const entries = table.baseSchema
+    table.baseSchema
       .array()
       .decode(await query)
-      .flatMap((row) =>
-        this.entries.findById(table, row[table.id.name]).map((entry) => {
-          entry.value = row
-          return entry
-        }),
-      )
+      .forEach((row) => {
+        entry.value = row
+        entry.dirty = false
+        entry.initialized = true
+      })
     return await this.from(this.schema).find(
-      includes(
-        table.id.name,
-        entries.map((entry) => entry.id.raw as TypeOf<P[string]>),
-      ),
+      includes(table.id.name, entry.id.value as TypeOf<P>[string]),
     )
   }
 }
@@ -399,20 +394,16 @@ export class QuerySave<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
       throw new Error(`"${table.id.name}" property must have value`)
     }
 
-    const changes = this.entries
-      .findById(table, id)
-      .map((entry) => {
-        entry.value = this.value
-        return entry
-      })
-      .flatMap((entry) =>
-        entry.properties.filter(
-          (prop) =>
-            prop.active &&
-            prop.dirty &&
-            !prop.column.id &&
-            !prop.column.generated,
-        ),
+    const entry = this.entries.findById(table, id)
+    entry.value = this.value
+
+    const changes = entry.properties
+      .filter(
+        (prop) =>
+          prop.active &&
+          prop.dirty &&
+          !prop.column.id &&
+          !prop.column.generated,
       )
       .map((prop) => [prop.column.name, prop.raw])
 
