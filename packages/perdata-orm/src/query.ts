@@ -114,12 +114,18 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
     const entries = table.baseSchema
       .array()
       .decode(await query)
-      .flatMap((row) =>
-        this.entries.findById(table, row[table.id.name]).map((entry) => {
-          entry.value = row
-          return entry
-        }),
-      )
+      .map((row) => {
+        const entries = this.entries
+          .findById(table, row[table.id.name])
+          .map((entry) => {
+            entry.value = row
+            entry.dirty = false
+            entry.initialized = true
+            return entry
+          })
+        // guaranteed to have at least 1 elements
+        return entries[0]!
+      })
 
     // resolve relations
     await Promise.all(
