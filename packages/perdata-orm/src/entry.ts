@@ -84,10 +84,9 @@ export class Entry {
   }
 
   public get value(): AnyRecord {
-    const raw = Object.fromEntries(
+    return Object.fromEntries(
       this.properties.map((prop) => [prop.column.name, prop.value]),
     )
-    return this.table.schema.decode(raw)
   }
 
   public set value(value: AnyRecord) {
@@ -97,7 +96,9 @@ export class Entry {
   }
 
   public get raw(): AnyRecord {
-    return this.table.schema.encode(this.value)
+    return Object.fromEntries(
+      this.properties.map((prop) => [prop.column.name, prop.raw]),
+    )
   }
 
   public set raw(value: AnyRecord) {
