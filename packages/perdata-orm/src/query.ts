@@ -351,16 +351,17 @@ export class QueryInsert<
   }
 
   public override async run(): Promise<TypeOf<P>[]> {
-    const table = new TableMetadata(this.schema)
     const query = this.query
       .clone()
-      .from(table.name)
+      .from(this.metadata.name)
       .insert(this.schema.array().encode(this.values))
-      .returning(table.id.name)
-    const ids = table.id.origin
+      .returning(this.metadata.id.name)
+    const ids = this.metadata.id.origin
       .array()
-      .encode(table.id.origin.array().decode(await query))
-    return await this.from(this.schema).find(includes(table.id.name, ids))
+      .encode(this.metadata.id.origin.array().decode(await query))
+    return await this.from(this.schema).find(
+      includes(this.metadata.id.name, ids),
+    )
   }
 
   public override insert(...values: TypeOf<P>[]): QueryInsert<P> {
@@ -386,24 +387,24 @@ export class QuerySave<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
   }
 
   public override async run(): Promise<TypeOf<P>[]> {
-    const table = new TableMetadata(this.schema)
-
-    if (!Object.hasOwn(this.value, table.id.name)) {
-      throw new Error(`Must specify "${table.id.name}" id property`)
+    if (!Object.hasOwn(this.value, this.metadata.id.name)) {
+      throw new Error(`Must specify "${this.metadata.id.name}" id property`)
     }
 
-    const id = this.value[table.id.name]
-    const keys = table.baseColumns
+    const id = this.value[this.metadata.id.name]
+    const keys = this.metadata.baseColumns
       .filter((col) => !col.id)
       .filter((col) => Object.hasOwn(this.value, col.name))
       .map((col) => col.name)
     const ids = await this.query
       .clone()
-      .from(table.name)
+      .from(this.metadata.name)
       .update(this.schema.pick(...keys).encode(this.value as TypeOf<P>))
-      .where(table.id.name, id)
-      .returning(table.id.name)
+      .where(this.metadata.id.name, id)
+      .returning(this.metadata.id.name)
 
-    return await this.from(this.schema).find(includes(table.id.name, ids))
+    return await this.from(this.schema).find(
+      includes(this.metadata.id.name, ids),
+    )
   }
 }
