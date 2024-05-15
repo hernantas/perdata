@@ -1,30 +1,30 @@
 import { Knex } from 'knex'
 import { AnyRecord, ObjectSchema, Schema, TypeOf } from 'pertype'
 import { EntryRegistry } from './entry'
-import { TableMetadata } from './metadata'
+import { MetadataRegistry } from './metadata'
 
 export class Query {
   public constructor(
     protected readonly query: Knex.QueryBuilder,
+    protected readonly metadata: MetadataRegistry,
     protected readonly entries: EntryRegistry,
   ) {}
 
   public from<P extends AnyRecord<Schema>>(
     schema: ObjectSchema<P>,
-    metadata: TableMetadata = new TableMetadata(schema),
   ): QueryCollection<P> {
-    return new QueryCollection(this.query, this.entries, schema, metadata)
+    return new QueryCollection(this.query, this.metadata, this.entries, schema)
   }
 }
 
 export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
   public constructor(
     query: Knex.QueryBuilder,
+    metadata: MetadataRegistry,
     entries: EntryRegistry,
     protected readonly schema: ObjectSchema<P>,
-    protected readonly metadata: TableMetadata,
   ) {
-    super(query, entries)
+    super(query, metadata, entries)
   }
 
   public find<K extends keyof P>(
@@ -34,12 +34,12 @@ export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
       | QueryFilterGroup<P>,
   ): QueryFind<P> {
     return condition !== undefined
-      ? new QueryFind(this.query, this.entries, this.schema, this.metadata)
+      ? new QueryFind(this.query, this.metadata, this.entries, this.schema)
       : new QueryFind(
           this.query,
+          this.metadata,
           this.entries,
           this.schema,
-          this.metadata,
           condition,
         )
   }
@@ -47,10 +47,9 @@ export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
   public insert(...values: TypeOf<P>[]): QueryInsert<P> {
     return new QueryInsert(
       this.query,
+      this.metadata,
       this.entries,
       this.schema,
-      this.metadata,
-
       values,
     )
   }
@@ -58,10 +57,9 @@ export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
   public save(value: Partial<TypeOf<P>>): QuerySave<P> {
     return new QuerySave(
       this.query,
+      this.metadata,
       this.entries,
       this.schema,
-      this.metadata,
-
       value,
     )
   }
@@ -84,21 +82,22 @@ export abstract class QueryExecutable<P extends AnyRecord<Schema>>
 export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
   public constructor(
     query: Knex.QueryBuilder,
+    metadata: MetadataRegistry,
     entries: EntryRegistry,
     schema: ObjectSchema<P>,
-    metadata: TableMetadata,
     private readonly condition?: QueryFilterGroup<P> | undefined,
     private readonly limitCount?: number,
     private readonly offsetCount?: number,
   ) {
-    super(query, entries, schema, metadata)
+    super(query, metadata, entries, schema)
   }
 
   public override async run(): Promise<TypeOf<P>[]> {
+    const table = this.metadata.get(this.schema)
     let query = this.query
       .clone()
-      .from(this.metadata.name)
-      .select(...this.metadata.baseColumns.map((column) => column.name))
+      .from(table.name)
+      .select(...table.baseColumns.map((column) => column.name))
 
     if (this.condition !== undefined) {
       query = buildFilter(query, this.condition)
@@ -112,28 +111,25 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
       query = query.offset(this.offsetCount)
     }
 
-    const entries = this.metadata.baseSchema
+    const entries = table.baseSchema
       .array()
       .decode(await query)
       .flatMap((row) =>
-        this.entries
-          .findById(this.metadata, row[this.metadata.id.name])
-          .map((entry) => {
-            entry.value = row
-            return entry
-          }),
+        this.entries.findById(table, row[table.id.name]).map((entry) => {
+          entry.value = row
+          return entry
+        }),
       )
 
     // resolve relations
     await Promise.all(
-      this.metadata.relationColumns.map(async (column) => {
+      table.relationColumns.map(async (column) => {
         const lookups = entries.map(
           (entry) => entry.property(column.sourceColumn).raw,
         )
-        await this.from(
-          column.foreignTable.origin as ObjectSchema<AnyRecord<Schema>>,
-          column.foreignTable,
-        ).find(includes(column.foreignColumn.name, lookups))
+        await this.from(column.foreignTable.schema).find(
+          includes(column.foreignColumn.name, lookups),
+        )
       }),
     )
 
@@ -143,9 +139,9 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
   public limit(count: number): QueryFind<P> {
     return new QueryFind(
       this.query,
+      this.metadata,
       this.entries,
       this.schema,
-      this.metadata,
       this.condition,
       count,
       this.offsetCount,
@@ -155,9 +151,9 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
   public offset(count: number): QueryFind<P> {
     return new QueryFind(
       this.query,
+      this.metadata,
       this.entries,
       this.schema,
-      this.metadata,
       this.condition,
       this.limitCount,
       count,
@@ -169,9 +165,9 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
   ): QueryFind<P> {
     return new QueryFind(
       this.query,
+      this.metadata,
       this.entries,
       this.schema,
-      this.metadata,
       and(condition),
       this.limitCount,
       this.offsetCount,
@@ -342,35 +338,34 @@ export class QueryInsert<
 > extends QueryExecutable<P> {
   public constructor(
     query: Knex.QueryBuilder,
+    metadata: MetadataRegistry,
     entries: EntryRegistry,
     schema: ObjectSchema<P>,
-    metadata: TableMetadata,
     private readonly values: TypeOf<P>[],
   ) {
-    super(query, entries, schema, metadata)
+    super(query, metadata, entries, schema)
   }
 
   public override async run(): Promise<TypeOf<P>[]> {
+    const table = this.metadata.get(this.schema)
     const query = this.query
       .clone()
-      .from(this.metadata.name)
+      .from(table.name)
       .insert(this.schema.array().encode(this.values))
-      .returning(this.metadata.baseColumns.map((column) => column.name))
+      .returning(table.baseColumns.map((column) => column.name))
 
-    const entries = this.metadata.baseSchema
+    const entries = table.baseSchema
       .array()
       .decode(await query)
       .flatMap((row) =>
-        this.entries
-          .findById(this.metadata, row[this.metadata.id.name])
-          .map((entry) => {
-            entry.value = row
-            return entry
-          }),
+        this.entries.findById(table, row[table.id.name]).map((entry) => {
+          entry.value = row
+          return entry
+        }),
       )
     return await this.from(this.schema).find(
       includes(
-        this.metadata.id.name,
+        table.id.name,
         entries.map((entry) => entry.id.raw as TypeOf<P[string]>),
       ),
     )
@@ -379,9 +374,9 @@ export class QueryInsert<
   public override insert(...values: TypeOf<P>[]): QueryInsert<P> {
     return new QueryInsert(
       this.query,
+      this.metadata,
       this.entries,
       this.schema,
-      this.metadata,
       this.values.concat(...values),
     )
   }
@@ -390,33 +385,46 @@ export class QueryInsert<
 export class QuerySave<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
   public constructor(
     query: Knex.QueryBuilder,
+    metadata: MetadataRegistry,
     entries: EntryRegistry,
     schema: ObjectSchema<P>,
-    metadata: TableMetadata,
     private readonly value: Partial<TypeOf<P>>,
   ) {
-    super(query, entries, schema, metadata)
+    super(query, metadata, entries, schema)
   }
 
   public override async run(): Promise<TypeOf<P>[]> {
-    if (!Object.hasOwn(this.value, this.metadata.id.name)) {
-      throw new Error(`Must specify "${this.metadata.id.name}" id property`)
+    const table = this.metadata.get(this.schema)
+    const id = this.value[table.id.name]
+
+    if (id === undefined) {
+      throw new Error(`"${table.id.name}" property must have value`)
     }
 
-    const id = this.value[this.metadata.id.name]
-    const keys = this.metadata.baseColumns
-      .filter((col) => !col.id)
-      .filter((col) => Object.hasOwn(this.value, col.name))
-      .map((col) => col.name)
-    const ids = await this.query
-      .clone()
-      .from(this.metadata.name)
-      .update(this.schema.pick(...keys).encode(this.value as TypeOf<P>))
-      .where(this.metadata.id.name, id)
-      .returning(this.metadata.id.name)
+    const changes = this.entries
+      .findById(table, id)
+      .map((entry) => {
+        entry.value = this.value
+        return entry
+      })
+      .flatMap((entry) =>
+        entry.properties.filter(
+          (prop) =>
+            prop.active &&
+            prop.dirty &&
+            !prop.column.id &&
+            !prop.column.generated,
+        ),
+      )
+      .map((prop) => [prop.column.name, prop.raw])
 
-    return await this.from(this.schema).find(
-      includes(this.metadata.id.name, ids),
-    )
+    await this.query
+      .clone()
+      .from(table.name)
+      .update(Object.fromEntries(changes))
+      .where(table.id.name, id)
+      .returning(table.id.name)
+
+    return await this.from(this.schema).find(includes(table.id.name, id))
   }
 }

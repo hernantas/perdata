@@ -1,5 +1,5 @@
 import { number, object, string } from 'pertype'
-import { TableMetadata } from './metadata'
+import { MetadataRegistry, TableMetadata } from './metadata'
 
 describe('TableMetadata', () => {
   const base = object({
@@ -15,25 +15,25 @@ describe('TableMetadata', () => {
 
   it('Should read "entity" metadata correctly', () => {
     const schema = base.set('entity', 'table_name')
-    const table = new TableMetadata(schema)
+    const table = new MetadataRegistry().get(schema)
     expect(table.name).toBe('table_name')
   })
 
   it('Should read "table" metadata correctly', () => {
     const schema = base.set('table', 'table_name')
-    const table = new TableMetadata(schema)
+    const table = new MetadataRegistry().get(schema)
     expect(table.name).toBe('table_name')
   })
 
   it('Should have 8 column declared', () => {
     const schema = base.set('table', 'table_name')
-    const table = new TableMetadata(schema)
+    const table = new MetadataRegistry().get(schema)
     expect(table.columns).toHaveLength(8)
   })
 
   describe('ColumnMetadata', () => {
     const schema = base.set('entity', 'table_name')
-    const table = new TableMetadata(schema)
+    const table = new MetadataRegistry().get(schema)
     testColumn({
       table,
       name: 'normal',
@@ -100,7 +100,7 @@ describe('TableMetadata', () => {
       value: string().optional(),
       rel: relationSchema,
     }).set('entity', 'table_name')
-    const table = new TableMetadata(schema)
+    const table = new MetadataRegistry().get(schema)
 
     expect(table.columns).toHaveLength(5)
   })

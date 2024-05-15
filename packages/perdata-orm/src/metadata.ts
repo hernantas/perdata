@@ -13,20 +13,41 @@ import {
 } from 'pertype'
 import { SchemaReader } from './util/reader'
 
-export class TableMetadata {
-  public readonly name: string
-  public readonly baseColumns: ColumnMetadata[] = []
-  public readonly relationColumns: RelationColumnMetadata[] = []
+export class MetadataRegistry {
+  private readonly storage: Map<string, TableMetadata> = new Map()
 
-  public constructor(public readonly origin: Schema) {
-    const name = readEntity(origin)
+  public tables(): IterableIterator<TableMetadata> {
+    return this.storage.values()
+  }
+
+  public get(schema: Schema): TableMetadata {
+    const name = readEntity(schema)
     if (name === undefined) {
       throw new Error(
         'Cannot read "entity" or "table" name metadata from Schema',
       )
     }
-    this.name = name
 
+    const table = this.storage.get(name)
+    if (table !== undefined) {
+      return table
+    }
+
+    const newTable = new TableMetadata(this, name, schema)
+    this.storage.set(name, newTable)
+    return newTable
+  }
+}
+
+export class TableMetadata {
+  public readonly baseColumns: ColumnMetadata[] = []
+  public readonly relationColumns: RelationColumnMetadata[] = []
+
+  public constructor(
+    registry: MetadataRegistry,
+    public readonly name: string,
+    public readonly origin: Schema,
+  ) {
     const props = readProperties(origin)
     for (const [key, schema] of Object.entries(props)) {
       const relation = readEntity(schema)
@@ -34,7 +55,13 @@ export class TableMetadata {
         const newColumn = new ColumnMetadata(this, key, schema, true)
         this.baseColumns.push(newColumn)
       } else {
-        const newColumn = new RelationColumnMetadata(this, key, schema, true)
+        const newColumn = new RelationColumnMetadata(
+          registry,
+          this,
+          key,
+          schema,
+          true,
+        )
         this.relationColumns.push(newColumn)
       }
     }
@@ -117,6 +144,7 @@ export class RelationColumnMetadata
   public readonly type: 'strong' | 'weak'
 
   public constructor(
+    registry: MetadataRegistry,
     table: TableMetadata,
     name: string,
     schema: Schema,
@@ -125,7 +153,7 @@ export class RelationColumnMetadata
     super(table, name, schema, declared)
 
     const sourceTable = this.table
-    const foreignTable = new TableMetadata(schema)
+    const foreignTable = registry.get(schema)
 
     this.owner = this.collection ? 'foreign' : readJoinOwner(schema)
 

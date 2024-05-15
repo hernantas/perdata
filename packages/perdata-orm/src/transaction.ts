@@ -1,13 +1,15 @@
 import { Knex } from 'knex'
 import { EntryRegistry } from './entry'
+import { MetadataRegistry } from './metadata'
 import { Query } from './query'
 
 export class Transaction extends Query {
   public constructor(
     protected readonly trx: Knex.Transaction,
+    metadata: MetadataRegistry,
     registry: EntryRegistry,
   ) {
-    super(trx.queryBuilder(), registry)
+    super(trx.queryBuilder(), metadata, registry)
   }
 
   public async commit(): Promise<void> {
