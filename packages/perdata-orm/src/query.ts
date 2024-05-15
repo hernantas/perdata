@@ -331,9 +331,9 @@ export class QueryInsert<
       .from(table.name)
       .insert(this.schema.array().encode(this.values))
       .returning(table.id.name)
-    const ids = table.id.schema
+    const ids = table.id.origin
       .array()
-      .encode(table.id.schema.array().decode(await query))
+      .encode(table.id.origin.array().decode(await query))
     return await this.from(this.schema).find(includes(table.id.name, ids))
   }
 

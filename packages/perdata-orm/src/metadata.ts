@@ -58,14 +58,14 @@ export class TableMetadata {
 
   public get baseSchema(): ObjectSchema<AnyRecord<Schema>> {
     return object(
-      Object.fromEntries(this.baseColumns.map((col) => [col.name, col.schema])),
+      Object.fromEntries(this.baseColumns.map((col) => [col.name, col.origin])),
     ).set('entity', this.name)
   }
 
   public get relationSchema(): ObjectSchema<AnyRecord<Schema>> {
     return object(
       Object.fromEntries(
-        this.relationColumns.map((col) => [col.name, col.schema]),
+        this.relationColumns.map((col) => [col.name, col.origin]),
       ),
     ).set('entity', this.name)
   }
@@ -73,8 +73,8 @@ export class TableMetadata {
   public get schema(): ObjectSchema<AnyRecord<Schema>> {
     return object(
       Object.fromEntries([
-        ...this.baseColumns.map((col) => [col.name, col.schema]),
-        ...this.relationColumns.map((col) => [col.name, col.schema]),
+        ...this.baseColumns.map((col) => [col.name, col.origin]),
+        ...this.relationColumns.map((col) => [col.name, col.origin]),
       ]),
     ).set('entity', this.name)
   }
@@ -96,14 +96,14 @@ export class ColumnMetadata {
     /** Column name */
     public readonly name: string,
     /** {@link Schema} used to declare column */
-    public readonly schema: Schema,
+    public readonly origin: Schema,
     /** Mark if column is declared in schema or not */
     public readonly declared: boolean,
   ) {
-    this.id = readId(schema)
-    this.generated = readGenerated(schema)
-    this.nullable = detectNullable(schema)
-    this.collection = detectCollection(schema)
+    this.id = readId(origin)
+    this.generated = readGenerated(origin)
+    this.nullable = detectNullable(origin)
+    this.collection = detectCollection(origin)
   }
 }
 
@@ -142,7 +142,7 @@ export class RelationColumnMetadata
         const newColumn = new ColumnMetadata(
           ownerTable,
           joinColumnName,
-          targetColumn.schema,
+          targetColumn.origin,
           false,
         )
         ownerTable.baseColumns.push(newColumn)
