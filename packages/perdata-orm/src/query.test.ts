@@ -44,14 +44,6 @@ describe('Query', () => {
       expect(result[0]).toHaveProperty('value')
     })
 
-    it('Should be able to select all from db table', async () => {
-      const schema = base.set('table', tableName)
-      const result = await db.from(schema).find().select('id')
-      expect(result[0]).toHaveProperty('id')
-      expect(result[0]).not.toHaveProperty('key')
-      expect(result[0]).not.toHaveProperty('value')
-    })
-
     it('Should be able to select with limit from db table', async () => {
       const schema = base.set('table', tableName)
       const result = await db.from(schema).find().limit(1)

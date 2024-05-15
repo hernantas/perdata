@@ -1,23 +1,30 @@
 import { Knex } from 'knex'
 import { AnyRecord, ObjectSchema, Schema, TypeOf } from 'pertype'
+import { EntryRegistry } from './entry'
 import { TableMetadata } from './metadata'
 
 export class Query {
-  public constructor(protected readonly query: Knex.QueryBuilder) {}
+  public constructor(
+    protected readonly query: Knex.QueryBuilder,
+    protected readonly registry: EntryRegistry,
+  ) {}
 
   public from<P extends AnyRecord<Schema>>(
     schema: ObjectSchema<P>,
+    metadata: TableMetadata = new TableMetadata(schema),
   ): QueryCollection<P> {
-    return new QueryCollection(this.query, schema)
+    return new QueryCollection(this.query, this.registry, schema, metadata)
   }
 }
 
 export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
   public constructor(
     query: Knex.QueryBuilder,
+    registry: EntryRegistry,
     protected readonly schema: ObjectSchema<P>,
+    protected readonly metadata: TableMetadata,
   ) {
-    super(query)
+    super(query, registry)
   }
 
   public find<K extends keyof P>(
@@ -27,16 +34,36 @@ export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
       | QueryFilterGroup<P>,
   ): QueryFind<P> {
     return condition !== undefined
-      ? new QueryFind(this.query, this.schema)
-      : new QueryFind(this.query, this.schema, condition)
+      ? new QueryFind(this.query, this.registry, this.schema, this.metadata)
+      : new QueryFind(
+          this.query,
+          this.registry,
+          this.schema,
+          this.metadata,
+          condition,
+        )
   }
 
   public insert(...values: TypeOf<P>[]): QueryInsert<P> {
-    return new QueryInsert(this.query, this.schema, values)
+    return new QueryInsert(
+      this.query,
+      this.registry,
+      this.schema,
+      this.metadata,
+
+      values,
+    )
   }
 
   public save(value: Partial<TypeOf<P>>): QuerySave<P> {
-    return new QuerySave(this.query, this.schema, value)
+    return new QuerySave(
+      this.query,
+      this.registry,
+      this.schema,
+      this.metadata,
+
+      value,
+    )
   }
 }
 
@@ -57,21 +84,21 @@ export abstract class QueryExecutable<P extends AnyRecord<Schema>>
 export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
   public constructor(
     query: Knex.QueryBuilder,
+    registry: EntryRegistry,
     schema: ObjectSchema<P>,
+    metadata: TableMetadata,
     private readonly condition?: QueryFilterGroup<P> | undefined,
     private readonly limitCount?: number,
     private readonly offsetCount?: number,
   ) {
-    super(query, schema)
+    super(query, registry, schema, metadata)
   }
 
   public override async run(): Promise<TypeOf<P>[]> {
-    const table = new TableMetadata(this.schema)
-
     let query = this.query
       .clone()
-      .from(table.name)
-      .select(...table.baseColumns.map((column) => column.name))
+      .from(this.metadata.name)
+      .select(...this.metadata.baseColumns.map((column) => column.name))
 
     if (this.condition !== undefined) {
       query = buildFilter(query, this.condition)
@@ -85,47 +112,40 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
       query = query.offset(this.offsetCount)
     }
 
-    const rows = table.baseSchema.array().decode(await query)
+    const entries = this.metadata.baseSchema
+      .array()
+      .decode(await query)
+      .flatMap((row) =>
+        this.registry
+          .findById(this.metadata, row[this.metadata.id.name])
+          .map((entry) => {
+            entry.value = row
+            return entry
+          }),
+      )
 
     // resolve relations
     await Promise.all(
-      table.relationColumns.map(async (column) => {
-        const lookups = rows.map((row) => row[column.sourceColumn.name])
-        const foreignRows = await this.from(
-          column.foreignColumn.table.schema,
+      this.metadata.relationColumns.map(async (column) => {
+        const lookups = entries.map(
+          (entry) => entry.property(column.sourceColumn)!.raw,
+        )
+        await this.from(
+          column.foreignTable.origin as ObjectSchema<AnyRecord<Schema>>,
+          column.foreignTable,
         ).find(includes(column.foreignColumn.name, lookups))
-
-        rows.forEach((row) => {
-          const relationValues = foreignRows.filter((foreignRow) => {
-            return (
-              row[column.sourceColumn.name] ===
-              foreignRow[column.foreignColumn.name]
-            )
-          })
-          row[column.name] = column.collection
-            ? relationValues
-            : relationValues[0]
-        })
       }),
     )
 
-    return this.schema.array().decode(rows)
-  }
-
-  public select<K extends keyof P>(...keys: K[]): QueryFind<Pick<P, K>> {
-    return new QueryFind(
-      this.query,
-      this.schema
-        .pick(...keys)
-        .set('entity', this.schema.get('entity'))
-        .set('table', this.schema.get('table')),
-    )
+    return this.schema.array().decode(entries.map((entry) => entry.value))
   }
 
   public limit(count: number): QueryFind<P> {
     return new QueryFind(
       this.query,
+      this.registry,
       this.schema,
+      this.metadata,
       this.condition,
       count,
       this.offsetCount,
@@ -135,7 +155,9 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
   public offset(count: number): QueryFind<P> {
     return new QueryFind(
       this.query,
+      this.registry,
       this.schema,
+      this.metadata,
       this.condition,
       this.limitCount,
       count,
@@ -147,7 +169,9 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
   ): QueryFind<P> {
     return new QueryFind(
       this.query,
+      this.registry,
       this.schema,
+      this.metadata,
       and(condition),
       this.limitCount,
       this.offsetCount,
@@ -318,10 +342,12 @@ export class QueryInsert<
 > extends QueryExecutable<P> {
   public constructor(
     query: Knex.QueryBuilder,
+    registry: EntryRegistry,
     schema: ObjectSchema<P>,
+    metadata: TableMetadata,
     private readonly values: TypeOf<P>[],
   ) {
-    super(query, schema)
+    super(query, registry, schema, metadata)
   }
 
   public override async run(): Promise<TypeOf<P>[]> {
@@ -340,7 +366,9 @@ export class QueryInsert<
   public override insert(...values: TypeOf<P>[]): QueryInsert<P> {
     return new QueryInsert(
       this.query,
+      this.registry,
       this.schema,
+      this.metadata,
       this.values.concat(...values),
     )
   }
@@ -349,10 +377,12 @@ export class QueryInsert<
 export class QuerySave<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
   public constructor(
     query: Knex.QueryBuilder,
+    registry: EntryRegistry,
     schema: ObjectSchema<P>,
+    metadata: TableMetadata,
     private readonly value: Partial<TypeOf<P>>,
   ) {
-    super(query, schema)
+    super(query, registry, schema, metadata)
   }
 
   public override async run(): Promise<TypeOf<P>[]> {

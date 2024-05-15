@@ -1,9 +1,13 @@
 import { Knex } from 'knex'
+import { EntryRegistry } from './entry'
 import { Query } from './query'
 
 export class Transaction extends Query {
-  public constructor(protected readonly trx: Knex.Transaction) {
-    super(trx.queryBuilder())
+  public constructor(
+    protected readonly trx: Knex.Transaction,
+    registry: EntryRegistry,
+  ) {
+    super(trx.queryBuilder(), registry)
   }
 
   public async commit(): Promise<void> {
