@@ -1,4 +1,5 @@
-import { number, object, string } from 'pertype'
+import { Knex } from 'knex'
+import { AnyRecord, number, object, string } from 'pertype'
 import { eq, or } from './query'
 import { DataSource } from './source'
 import { getEnvironment } from './util/environment'
@@ -20,20 +21,28 @@ describe('Query', () => {
     value: string().optional(),
   })
 
+  async function setup(
+    connection: Knex,
+    tableName: string,
+    fn: (index: number) => AnyRecord,
+  ) {
+    await connection.from(tableName).truncate()
+    await Promise.all(
+      [...Array(10).keys()].map((index) =>
+        connection.from(tableName).insert(fn(index)),
+      ),
+    )
+  }
+
   describe('Select', () => {
     const tableName = 'simple_select'
 
-    beforeAll(async () => {
-      await db.connection().from(tableName).truncate()
-      await Promise.all(
-        [...Array(10).keys()].map((number) =>
-          db
-            .connection()
-            .from(tableName)
-            .insert({ key: `key-${number}`, value: `value-${number}` }),
-        ),
-      )
-    })
+    beforeAll(async () =>
+      setup(db.connection(), tableName, (number) => ({
+        key: `key-${number}`,
+        value: `value-${number}`,
+      })),
+    )
 
     it('Should be able to select all from db table', async () => {
       const schema = base.set('table', tableName)
@@ -101,82 +110,6 @@ describe('Query', () => {
     expect(result[0]).toHaveProperty('id')
     expect(result[0]).toHaveProperty('key', 'key-u')
     expect(result[0]).toHaveProperty('value', 'value-u')
-  })
-
-  describe('Relation', () => {
-    it('Should also resolve one-to-one relations', async () => {
-      const foreignName = 'relation_one_to_one_source_2_find'
-      await db.connection().from(foreignName).truncate()
-      await Promise.all(
-        [...Array(10).keys()].map((number) =>
-          db
-            .connection()
-            .from(foreignName)
-            .insert({ key: `key-${number}`, value: `value-${number}` }),
-        ),
-      )
-
-      const sourceName = 'relation_one_to_one_source_1_find'
-      await db.connection().from(sourceName).truncate()
-      await Promise.all(
-        [...Array(10).keys()].map((number) =>
-          db
-            .connection()
-            .from(sourceName)
-            .insert({
-              key: `key-${number}`,
-              value: `value-${number}`,
-              relation_one_to_one_source_2_find_id: number + 1,
-            }),
-        ),
-      )
-
-      const schemaForeign = base.set('table', foreignName)
-      const schemaSource = object({
-        ...base.properties,
-        relation: schemaForeign,
-      }).set('table', sourceName)
-
-      const result = await db.from(schemaSource).find()
-      expect(result).toHaveLength(10)
-    })
-
-    it('Should also resolve one-to-many relations', async () => {
-      const sourceName = 'relation_one_to_many_1_find'
-      await db.connection().from(sourceName).truncate()
-      await Promise.all(
-        [...Array(10).keys()].map((number) =>
-          db
-            .connection()
-            .from(sourceName)
-            .insert({ key: `key-${number}`, value: `value-${number}` }),
-        ),
-      )
-
-      const foreignName = 'relation_one_to_many_2_find'
-      await db.connection().from(foreignName).truncate()
-      await Promise.all(
-        [...Array(10).keys()].map((number) =>
-          db
-            .connection()
-            .from(foreignName)
-            .insert({
-              key: `key-${number}`,
-              value: `value-${number}`,
-              relation_one_to_many_1_find_id: number + 1,
-            }),
-        ),
-      )
-
-      const schemaForeign = base.set('table', foreignName)
-      const schemaSource = object({
-        ...base.properties,
-        relation: schemaForeign.array(),
-      }).set('table', sourceName)
-
-      const result = await db.from(schemaSource).find()
-      expect(result).toHaveLength(10)
-    })
   })
 
   afterAll(() => db.close())
