@@ -87,17 +87,7 @@ export class Entry {
     const raw = Object.fromEntries(
       this.properties.map((prop) => [prop.column.name, prop.value]),
     )
-    try {
-      return this.table.schema.decode(raw)
-    } catch (e) {
-      // console.log(
-      //   this.table.name,
-      //   this.table.schema.keys,
-      //   raw,
-      //   this.table.schema.is(raw),
-      // )
-      throw e
-    }
+    return this.table.schema.decode(raw)
   }
 
   public set value(value: AnyRecord) {
@@ -223,13 +213,6 @@ export class EntryPropertyRelation extends EntryProperty {
 
   public override get value(): unknown {
     const entries = this.foreignEntries
-    // console.log(
-    //   this.column.table.name,
-    //   this.column.name,
-    //   this.column.collection,
-    //   entries.length,
-    //   this.registry.get(this.column.foreignTable).length,
-    // )
     return this.column.collection
       ? entries.map((entry) => entry.value)
       : entries[0]?.value
