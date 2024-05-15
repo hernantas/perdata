@@ -9,6 +9,10 @@ import { MapList } from './util/map'
 export class EntryRegistry {
   private readonly storage: MapList<TableMetadata, Entry> = new MapList()
 
+  public get tables(): IterableIterator<TableMetadata> {
+    return this.storage.keys()
+  }
+
   public get(table: TableMetadata): Entry[] {
     return this.storage.get(table)
   }
