@@ -105,7 +105,7 @@ describe('Query', () => {
 
   describe('Relation', () => {
     it('Should also resolve one-to-one relations', async () => {
-      const foreignName = 'relation_one_to_one_source_2'
+      const foreignName = 'relation_one_to_one_source_2_find'
       await db.connection().from(foreignName).truncate()
       await Promise.all(
         [...Array(10).keys()].map((number) =>
@@ -116,7 +116,7 @@ describe('Query', () => {
         ),
       )
 
-      const sourceName = 'relation_one_to_one_source_1'
+      const sourceName = 'relation_one_to_one_source_1_find'
       await db.connection().from(sourceName).truncate()
       await Promise.all(
         [...Array(10).keys()].map((number) =>
@@ -126,7 +126,7 @@ describe('Query', () => {
             .insert({
               key: `key-${number}`,
               value: `value-${number}`,
-              relation_one_to_one_source_2_id: number + 1,
+              relation_one_to_one_source_2_find_id: number + 1,
             }),
         ),
       )
@@ -142,7 +142,7 @@ describe('Query', () => {
     })
 
     it('Should also resolve one-to-many relations', async () => {
-      const sourceName = 'relation_one_to_many_1'
+      const sourceName = 'relation_one_to_many_1_find'
       await db.connection().from(sourceName).truncate()
       await Promise.all(
         [...Array(10).keys()].map((number) =>
@@ -153,7 +153,7 @@ describe('Query', () => {
         ),
       )
 
-      const foreignName = 'relation_one_to_many_2'
+      const foreignName = 'relation_one_to_many_2_find'
       await db.connection().from(foreignName).truncate()
       await Promise.all(
         [...Array(10).keys()].map((number) =>
@@ -163,7 +163,7 @@ describe('Query', () => {
             .insert({
               key: `key-${number}`,
               value: `value-${number}`,
-              relation_one_to_many_1_id: number + 1,
+              relation_one_to_many_1_find_id: number + 1,
             }),
         ),
       )
