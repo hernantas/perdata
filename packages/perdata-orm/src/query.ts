@@ -1,6 +1,6 @@
 import { Knex } from 'knex'
 import { AnyRecord, ObjectSchema, OptionalOf, Schema, TypeOf } from 'pertype'
-import { EntryRegistry } from './entry'
+import { Entry, EntryRegistry } from './entry'
 import { MetadataRegistry } from './metadata'
 
 export class Query {
@@ -354,21 +354,7 @@ export class QueryInsert<
     const entry = this.entries.create(table)
     entry.value = this.value
     entry.id.value = undefined
-
-    const query = this.query
-      .clone()
-      .from(table.name)
-      .insert(table.baseSchema.encode(entry.value))
-      .returning(table.baseColumns.map((column) => column.name))
-
-    table.baseSchema
-      .array()
-      .decode(await query)
-      .forEach((row) => {
-        entry.value = row
-        entry.dirty = false
-        entry.initialized = true
-      })
+    await flush(this.query, entry)
     return await this.from(this.schema).find(
       includes(table.id.name, entry.id.value as TypeOf<P>[string]),
     )
@@ -389,14 +375,39 @@ export class QuerySave<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
   public override async run(): Promise<OptionalOf<TypeOf<P>>[]> {
     const table = this.metadata.get(this.schema)
     const id = this.value[table.id.name]
-
-    if (id === undefined) {
-      throw new Error(`"${table.id.name}" property must have value`)
-    }
-
-    const entry = this.entries.findById(table, id)
+    const entry =
+      id !== undefined
+        ? this.entries.findById(table, id)
+        : this.entries.create(table)
     entry.value = this.value
+    await flush(this.query, entry)
+    return await this.from(this.schema).find(
+      includes(table.id.name, entry.id.value as TypeOf<P>[string]),
+    )
+  }
+}
 
+async function flush(
+  connection: Knex.QueryBuilder,
+  entry: Entry,
+): Promise<Entry> {
+  if (entry.id.value === undefined) {
+    // insert
+    const query = connection
+      .clone()
+      .from(entry.table.name)
+      .insert(entry.table.baseSchema.encode(entry.value))
+      .returning(entry.table.baseColumns.map((column) => column.name))
+    entry.table.baseSchema
+      .array()
+      .decode(await query)
+      .forEach((row) => {
+        entry.value = row
+        entry.dirty = false
+        entry.initialized = true
+      })
+  } else {
+    // update
     const changes = entry.properties
       .filter(
         (prop) =>
@@ -406,14 +417,14 @@ export class QuerySave<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
           !prop.column.generated,
       )
       .map((prop) => [prop.column.name, prop.raw])
-
-    await this.query
-      .clone()
-      .from(table.name)
-      .update(Object.fromEntries(changes))
-      .where(table.id.name, id)
-      .returning(table.id.name)
-
-    return await this.from(this.schema).find(includes(table.id.name, id))
+    if (changes.length > 0) {
+      await connection
+        .clone()
+        .from(entry.table.name)
+        .update(Object.fromEntries(changes))
+        .where(entry.table.id.name, entry.id.raw as string)
+        .returning(entry.table.id.name)
+    }
   }
+  return entry
 }
