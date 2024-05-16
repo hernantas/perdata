@@ -220,54 +220,27 @@ export class EntryPropertyRelation extends EntryProperty {
     super(registry, entry)
   }
 
-  private link(foreignEntry: Entry | undefined) {
-    // unlink old foreign entries
-    if (this.column.owner === 'source') {
-      this.entry.property(this.column.sourceColumn).value = undefined
-    } else if (this.data !== undefined) {
-      this.data.property(this.column.foreignColumn).value = undefined
-    }
-
-    this.data = foreignEntry
-    this.sync()
-  }
-
-  public override sync(): void {
-    if (this.data !== undefined) {
-      if (this.column.owner === 'source') {
-        this.entry.property(this.column.sourceColumn).value =
-          this.data.property(this.column.foreignColumn).value
-      } else {
-        this.data.property(this.column.foreignColumn).value =
-          this.entry.property(this.column.sourceColumn).value
-      }
-    }
-  }
-
   public override get value(): unknown {
     return this.data?.value
   }
 
   public override set value(value: unknown) {
-    if (value === undefined) {
-      this.link(undefined)
-    } else {
+    this.unlink()
+    this.data = undefined
+
+    if (value !== undefined) {
       const row = this.column.foreignTable.schema.decode(value)
       const id = row[this.column.foreignTable.id.name]
       if (id !== undefined) {
-        const foreignEntry = this.registry.findById(
-          this.column.foreignTable,
-          id,
-        )
+        this.data = this.registry.findById(this.column.foreignTable, id)
         if (this.column.type === 'strong') {
-          foreignEntry.value = row
+          this.data.value = row
         }
-        this.link(foreignEntry)
       } else {
-        const foreignEntry = this.registry.create(this.column.foreignTable)
-        foreignEntry.value = row
-        this.link(foreignEntry)
+        this.data = this.registry.create(this.column.foreignTable)
+        this.data.value = row
       }
+      this.link()
     }
   }
 
@@ -277,6 +250,30 @@ export class EntryPropertyRelation extends EntryProperty {
 
   public override set raw(value: unknown) {
     this.value = value
+  }
+
+  public override sync(): void {
+    this.link()
+  }
+
+  private link(): void {
+    if (this.column.owner === 'source') {
+      this.entry.property(this.column.sourceColumn).value = this.data?.property(
+        this.column.foreignColumn,
+      ).value
+    } else if (this.data !== undefined) {
+      this.data.property(this.column.foreignColumn).value = this.entry.property(
+        this.column.sourceColumn,
+      ).value
+    }
+  }
+
+  private unlink(): void {
+    if (this.column.owner === 'source') {
+      this.entry.property(this.column.sourceColumn).value = undefined
+    } else if (this.data !== undefined) {
+      this.data.property(this.column.foreignColumn).value = undefined
+    }
   }
 }
 
@@ -291,7 +288,53 @@ export class EntryPropertyMultiRelation extends EntryProperty {
     super(registry, entry)
   }
 
+  public override get value(): unknown {
+    return this.data?.map((entry) => entry.value)
+  }
+
+  public override set value(value: unknown) {
+    this.unlink()
+    this.data = undefined
+
+    const entries = this.column.foreignTable.schema
+      .array()
+      .decode(value)
+      .map((row) => {
+        const id = row[this.column.foreignTable.id.name]
+        if (id !== undefined) {
+          const foreignEntry = this.registry.findById(
+            this.column.foreignTable,
+            id,
+          )
+          if (this.column.type === 'strong') {
+            foreignEntry.value = row
+          }
+          return foreignEntry
+        } else {
+          const foreignEntry = this.registry.create(this.column.foreignTable)
+          foreignEntry.value = row
+          return foreignEntry
+        }
+      })
+    if (entries.length > 0) {
+      this.data = entries
+      this.link()
+    }
+  }
+
+  public override get raw(): unknown {
+    return this.column.origin.encode(this.value)
+  }
+
+  public override set raw(value: unknown) {
+    this.value = value
+  }
+
   public override sync(): void {
+    this.link()
+  }
+
+  private link(): void {
     if (this.data !== undefined) {
       if (this.column.owner === 'source') {
         this.entry.property(this.column.sourceColumn).value =
@@ -309,12 +352,7 @@ export class EntryPropertyMultiRelation extends EntryProperty {
     }
   }
 
-  public override get value(): unknown {
-    return this.data?.map((entry) => entry.value)
-  }
-
-  public override set value(value: unknown) {
-    // unlink old entries
+  private unlink(): void {
     if (this.column.owner === 'source') {
       this.entry.property(this.column.sourceColumn).value = undefined
     } else {
@@ -323,37 +361,5 @@ export class EntryPropertyMultiRelation extends EntryProperty {
           (foreignEntry.property(this.column.foreignColumn).value = undefined),
       )
     }
-    this.data = undefined
-
-    const rows = this.column.foreignTable.schema.array().decode(value)
-    if (rows.length > 0) {
-      const entries = rows.map((row) => {
-        const id = row[this.column.foreignTable.id.name]
-        if (id !== undefined) {
-          const foreignEntry = this.registry.findById(
-            this.column.foreignTable,
-            id,
-          )
-          if (this.column.type === 'strong') {
-            foreignEntry.value = row
-          }
-          return foreignEntry
-        } else {
-          const foreignEntry = this.registry.create(this.column.foreignTable)
-          foreignEntry.value = row
-          return foreignEntry
-        }
-      })
-      this.data = entries
-      this.sync()
-    }
-  }
-
-  public override get raw(): unknown {
-    return this.column.origin.encode(this.value)
-  }
-
-  public override set raw(value: unknown) {
-    this.value = value
   }
 }
