@@ -33,14 +33,14 @@ export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
       | QueryFilterMultiple<P, K>
       | QueryFilterGroup<P>,
   ): QueryFind<P> {
-    return condition !== undefined
+    return condition === undefined
       ? new QueryFind(this.query, this.metadata, this.entries, this.schema)
       : new QueryFind(
           this.query,
           this.metadata,
           this.entries,
           this.schema,
-          condition,
+          and(condition),
         )
   }
 
@@ -335,13 +335,21 @@ export interface QueryFilterGroup<P extends AnyRecord<Schema>> {
 }
 
 export function and<P extends AnyRecord<Schema>>(
-  ...conditions: (QueryFilter<P, keyof P> | QueryFilterGroup<P>)[]
+  ...conditions: (
+    | QueryFilter<P, keyof P>
+    | QueryFilterMultiple<P, keyof P>
+    | QueryFilterGroup<P>
+  )[]
 ): QueryFilterGroup<P> {
   return { operator: 'and', conditions }
 }
 
 export function or<P extends AnyRecord<Schema>>(
-  ...conditions: (QueryFilter<P, keyof P> | QueryFilterGroup<P>)[]
+  ...conditions: (
+    | QueryFilter<P, keyof P>
+    | QueryFilterMultiple<P, keyof P>
+    | QueryFilterGroup<P>
+  )[]
 ): QueryFilterGroup<P> {
   return { operator: 'or', conditions }
 }
