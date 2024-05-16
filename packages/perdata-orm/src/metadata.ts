@@ -167,10 +167,17 @@ export class RelationColumnMetadata
     const ownerColumn =
       ownerTable.column(joinColumnName) ??
       (() => {
+        let joinSchema = targetColumn.origin
+          .set('id', false)
+          .set('generated', false)
+
+        if (this.nullable) {
+          joinSchema = joinSchema.optional()
+        }
         const newColumn = new ColumnMetadata(
           ownerTable,
           joinColumnName,
-          targetColumn.origin.set('id', false).set('generated', false),
+          joinSchema,
           false,
         )
         ownerTable.baseColumns.push(newColumn)
