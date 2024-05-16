@@ -408,6 +408,8 @@ async function flush(
 ): Promise<Entry> {
   await flushBase(connection, entry)
 
+  entry.sync()
+
   // flush relations
   await Promise.all(
     entry.table.relationColumns
