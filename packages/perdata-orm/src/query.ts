@@ -365,9 +365,7 @@ export class QueryInsert<
     entry.value = this.value
     entry.id.value = undefined
     await flush(this.query, this.entries, entry)
-    return await this.from(this.schema).find(
-      includes(table.id.name, entry.id.value as TypeOf<P>[string]),
-    )
+    return this.schema.array().decode(entry.value)
   }
 }
 
@@ -391,9 +389,7 @@ export class QuerySave<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
         : this.entries.create(table)
     entry.value = this.value
     await flush(this.query, this.entries, entry)
-    return await this.from(this.schema).find(
-      includes(table.id.name, entry.id.value as TypeOf<P>[string]),
-    )
+    return this.schema.array().decode(entry.value)
   }
 }
 
