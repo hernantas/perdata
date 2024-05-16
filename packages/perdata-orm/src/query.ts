@@ -128,9 +128,19 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
         const lookups = entries.map(
           (entry) => entry.property(column.sourceColumn).raw,
         )
-        await this.from(column.foreignTable.schema).find(
+        const foreignValues = await this.from(column.foreignTable.schema).find(
           includes(column.foreignColumn.name, lookups),
         )
+        entries.forEach((entry) => {
+          const matchedEntries = foreignValues.filter(
+            (foreignValue) =>
+              foreignValue[column.foreignColumn.name] ===
+              entry.property(column.sourceColumn).value,
+          )
+          entry.property(column).value = column.collection
+            ? matchedEntries
+            : matchedEntries[0]
+        })
       }),
     )
 
@@ -354,7 +364,7 @@ export class QueryInsert<
     const entry = this.entries.create(table)
     entry.value = this.value
     entry.id.value = undefined
-    await flush(this.query, entry)
+    await flush(this.query, this.entries, entry)
     return await this.from(this.schema).find(
       includes(table.id.name, entry.id.value as TypeOf<P>[string]),
     )
@@ -380,7 +390,7 @@ export class QuerySave<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
         ? this.entries.findById(table, id)
         : this.entries.create(table)
     entry.value = this.value
-    await flush(this.query, entry)
+    await flush(this.query, this.entries, entry)
     return await this.from(this.schema).find(
       includes(table.id.name, entry.id.value as TypeOf<P>[string]),
     )
@@ -388,6 +398,27 @@ export class QuerySave<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
 }
 
 async function flush(
+  connection: Knex.QueryBuilder,
+  entries: EntryRegistry,
+  entry: Entry,
+): Promise<Entry> {
+  await flushBase(connection, entry)
+
+  // flush relations
+  await Promise.all(
+    entry.table.relationColumns
+      .flatMap((column) => entries.get(column.foreignTable))
+      .map((foreignEntry) => flush(connection, entries, foreignEntry)),
+  )
+
+  entry.sync()
+
+  // flush entry once more if anything changes
+  await flushBase(connection, entry)
+  return entry
+}
+
+async function flushBase(
   connection: Knex.QueryBuilder,
   entry: Entry,
 ): Promise<Entry> {
@@ -418,12 +449,20 @@ async function flush(
       )
       .map((prop) => [prop.column.name, prop.raw])
     if (changes.length > 0) {
-      await connection
+      const query = connection
         .clone()
         .from(entry.table.name)
         .update(Object.fromEntries(changes))
         .where(entry.table.id.name, entry.id.raw as string)
-        .returning(entry.table.id.name)
+        .returning(entry.table.baseColumns.map((column) => column.name))
+      entry.table.baseSchema
+        .array()
+        .decode(await query)
+        .forEach((row) => {
+          entry.value = row
+          entry.dirty = false
+          entry.initialized = true
+        })
     }
   }
   return entry

@@ -117,6 +117,10 @@ export class Entry {
       .filter((prop) => Object.hasOwn(value, prop.column.name))
       .forEach((prop) => (prop.raw = value[prop.column.name]))
   }
+
+  public sync(): void {
+    this.properties.forEach((prop) => prop.sync())
+  }
 }
 
 export abstract class EntryProperty {
@@ -164,6 +168,8 @@ export abstract class EntryProperty {
     this._dirty = value
   }
 
+  public sync(): void {}
+
   public abstract get column(): ColumnMetadata
   public abstract get value(): unknown
   public abstract set value(value: unknown)
@@ -202,7 +208,7 @@ export class EntryPropertyValue extends EntryProperty {
 }
 
 export class EntryPropertyRelation extends EntryProperty {
-  private data: Entry | Entry[] | undefined
+  private data: Entry | undefined
 
   public constructor(
     registry: EntryRegistry,
@@ -212,52 +218,53 @@ export class EntryPropertyRelation extends EntryProperty {
     super(registry, entry)
   }
 
-  private get entries(): Entry[] {
-    return Array.isArray(this.data)
-      ? this.data
-      : this.data !== undefined
-        ? [this.data]
-        : []
-  }
-
-  public override get value(): unknown {
-    return Array.isArray(this.data)
-      ? this.data.map((entry) => entry.value)
-      : this.data !== undefined
-        ? this.data.value
-        : undefined
-  }
-
-  public override set value(value: unknown) {
+  private link(foreignEntry: Entry | undefined) {
     // unlink old foreign entries
     if (this.column.owner === 'source') {
       this.entry.property(this.column.sourceColumn).value = undefined
-    } else {
-      this.entries.forEach(
-        (entry) =>
-          (entry.property(this.column.foreignColumn).value = undefined),
-      )
+    } else if (this.data !== undefined) {
+      this.data.property(this.column.foreignColumn).value = undefined
     }
 
-    if (Array.isArray(value)) {
-      throw new Error('Not Implemented yet')
+    this.data = foreignEntry
+    this.sync()
+  }
+
+  public override sync(): void {
+    if (this.data !== undefined) {
+      if (this.column.owner === 'source') {
+        this.entry.property(this.column.sourceColumn).value =
+          this.data.property(this.column.foreignColumn).value
+      } else {
+        this.data.property(this.column.foreignColumn).value =
+          this.entry.property(this.column.sourceColumn).value
+      }
+    }
+  }
+
+  public override get value(): unknown {
+    return this.data?.value
+  }
+
+  public override set value(value: unknown) {
+    if (value === undefined) {
+      this.link(undefined)
     } else {
       const row = this.column.foreignTable.schema.decode(value)
       const id = row[this.column.foreignTable.id.name]
-      const foreignEntry = this.registry.findById(this.column.foreignTable, id)
-      this.data = foreignEntry
-
-      if (this.column.type === 'strong') {
-        foreignEntry.value = row
-      }
-
-      // linking
-      if (this.column.owner === 'source') {
-        this.entry.property(this.column.sourceColumn).value =
-          foreignEntry.property(this.column.foreignColumn).value
+      if (id !== undefined) {
+        const foreignEntry = this.registry.findById(
+          this.column.foreignTable,
+          id,
+        )
+        if (this.column.type === 'strong') {
+          foreignEntry.value = row
+        }
+        this.link(foreignEntry)
       } else {
-        foreignEntry.property(this.column.foreignColumn).value =
-          this.entry.property(this.column.sourceColumn).value
+        const foreignEntry = this.registry.create(this.column.foreignTable)
+        foreignEntry.value = row
+        this.link(foreignEntry)
       }
     }
   }
