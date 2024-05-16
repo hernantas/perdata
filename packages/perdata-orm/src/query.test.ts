@@ -112,5 +112,163 @@ describe('Query', () => {
     expect(result[0]).toHaveProperty('value', 'value-u')
   })
 
+  describe('Relation', () => {
+    describe('One-to-One (Owner: Source) Relationship', () => {
+      it('Should be able to resolve relations on "find"', async () => {
+        const foreignName = 'one_to_one_source_find_2'
+        await setup(db.connection(), foreignName, (number) => ({
+          key: `key-${number}`,
+          value: `value-${number}`,
+        }))
+        const foreignSchema = base.set('table', foreignName)
+
+        const sourceName = 'one_to_one_source_find_1'
+        await setup(db.connection(), sourceName, (number) => ({
+          key: `key-${number}`,
+          value: `value-${number}`,
+          one_to_one_source_find_2_id: number + 1,
+        }))
+        const schema = object({
+          ...base.props,
+          relation: foreignSchema,
+        }).set('table', sourceName)
+
+        const result = await db.from(schema).find()
+        expect(result).toHaveLength(10)
+      })
+
+      it('Should be able to insert (and insert relation)', async () => {
+        const foreignName = 'one_to_one_source_insert_insert_2'
+        await db.connection().from(foreignName).truncate()
+        const foreignSchema = base.set('table', foreignName)
+
+        const sourceName = 'one_to_one_source_insert_insert_1'
+        await db.connection().from(sourceName).truncate()
+        const schema = object({
+          ...base.props,
+          relation: foreignSchema,
+        }).set('table', sourceName)
+
+        const inserted = await db.from(schema).insert({
+          key: 'key',
+          value: 'value',
+          relation: {
+            key: 'key',
+            value: 'value',
+          },
+        })
+
+        expect(inserted).toHaveLength(1)
+        expect(inserted[0]).toHaveProperty('id')
+        expect(inserted[0]).toHaveProperty('key', 'key')
+        expect(inserted[0]).toHaveProperty('value', 'value')
+        expect(inserted[0]).toHaveProperty('relation')
+        expect(inserted[0]!.relation).toHaveProperty('id')
+        expect(inserted[0]!.relation).toHaveProperty('key', 'key')
+        expect(inserted[0]!.relation).toHaveProperty('value', 'value')
+
+        const result = await db.from(schema).find()
+        expect(result).toHaveLength(1)
+        expect(result[0]).toHaveProperty('id')
+        expect(result[0]).toHaveProperty('key', 'key')
+        expect(result[0]).toHaveProperty('value', 'value')
+        expect(result[0]).toHaveProperty('relation')
+        expect(result[0]!.relation).toHaveProperty('id')
+        expect(result[0]!.relation).toHaveProperty('key', 'key')
+        expect(result[0]!.relation).toHaveProperty('value', 'value')
+      })
+
+      it('Should be able to insert (and save relation)', async () => {
+        const foreignName = 'one_to_one_source_insert_save_2'
+        setup(db.connection(), foreignName, (number) => ({
+          key: `key-${number}`,
+          value: `value-${number}`,
+        }))
+        const foreignSchema = base.set('table', foreignName)
+
+        const sourceName = 'one_to_one_source_insert_save_1'
+        await db.connection().from(sourceName).truncate()
+        const schema = object({
+          ...base.props,
+          relation: foreignSchema.set('reference', 'strong'),
+        }).set('table', sourceName)
+
+        const inserted = await db.from(schema).insert({
+          key: 'key',
+          value: 'value',
+          relation: {
+            id: 1,
+            key: 'key',
+            value: 'value',
+          },
+        })
+
+        expect(inserted).toHaveLength(1)
+        expect(inserted[0]).toHaveProperty('id')
+        expect(inserted[0]).toHaveProperty('key', 'key')
+        expect(inserted[0]).toHaveProperty('value', 'value')
+        expect(inserted[0]).toHaveProperty('relation')
+        expect(inserted[0]!.relation).toHaveProperty('id')
+        expect(inserted[0]!.relation).toHaveProperty('key', 'key')
+        expect(inserted[0]!.relation).toHaveProperty('value', 'value')
+
+        const result = await db.from(schema).find()
+        expect(result).toHaveLength(1)
+        expect(result[0]).toHaveProperty('id')
+        expect(result[0]).toHaveProperty('key', 'key')
+        expect(result[0]).toHaveProperty('value', 'value')
+        expect(result[0]).toHaveProperty('relation')
+        expect(result[0]!.relation).toHaveProperty('id')
+        expect(result[0]!.relation).toHaveProperty('key', 'key')
+        expect(result[0]!.relation).toHaveProperty('value', 'value')
+      })
+
+      it('Should be able to save (and insert relation)', async () => {
+        const foreignName = 'one_to_one_source_save_insert_2'
+        await db.connection().from(foreignName).truncate()
+        const foreignSchema = base.set('table', foreignName)
+
+        const sourceName = 'one_to_one_source_save_insert_1'
+        setup(db.connection(), sourceName, (number) => ({
+          key: `key-${number}`,
+          value: `value-${number}`,
+        }))
+        const schema = object({
+          ...base.props,
+          relation: foreignSchema.optional().set('reference', 'strong'),
+        }).set('table', sourceName)
+
+        const saved = await db.from(schema).save({
+          id: 1,
+          key: 'key',
+          value: 'value',
+          relation: {
+            key: 'key',
+            value: 'value',
+          },
+        })
+
+        expect(saved).toHaveLength(1)
+        expect(saved[0]).toHaveProperty('id')
+        expect(saved[0]).toHaveProperty('key', 'key')
+        expect(saved[0]).toHaveProperty('value', 'value')
+        expect(saved[0]).toHaveProperty('relation')
+        expect(saved[0]!.relation).toHaveProperty('id')
+        expect(saved[0]!.relation).toHaveProperty('key', 'key')
+        expect(saved[0]!.relation).toHaveProperty('value', 'value')
+
+        const result = await db.from(schema).find(eq('id', 1))
+        expect(result).toHaveLength(1)
+        expect(result[0]).toHaveProperty('id')
+        expect(result[0]).toHaveProperty('key', 'key')
+        expect(result[0]).toHaveProperty('value', 'value')
+        expect(result[0]).toHaveProperty('relation')
+        expect(result[0]!.relation).toHaveProperty('id')
+        expect(result[0]!.relation).toHaveProperty('key', 'key')
+        expect(result[0]!.relation).toHaveProperty('value', 'value')
+      })
+    })
+  })
+
   afterAll(() => db.close())
 })
