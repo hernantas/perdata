@@ -60,7 +60,9 @@ export class Entry {
 
     const newProperty =
       column instanceof RelationColumnMetadata
-        ? new EntryPropertyRelation(this.registry, this, column)
+        ? column.collection
+          ? new EntryPropertyMultiRelation(this.registry, this, column)
+          : new EntryPropertyRelation(this.registry, this, column)
         : new EntryPropertyValue(this.registry, this, column)
     this.properties.push(newProperty)
     return newProperty
@@ -266,6 +268,84 @@ export class EntryPropertyRelation extends EntryProperty {
         foreignEntry.value = row
         this.link(foreignEntry)
       }
+    }
+  }
+
+  public override get raw(): unknown {
+    return this.column.origin.encode(this.value)
+  }
+
+  public override set raw(value: unknown) {
+    this.value = value
+  }
+}
+
+export class EntryPropertyMultiRelation extends EntryProperty {
+  private data: Entry[] | undefined
+
+  public constructor(
+    registry: EntryRegistry,
+    entry: Entry,
+    public readonly column: RelationColumnMetadata,
+  ) {
+    super(registry, entry)
+  }
+
+  public override sync(): void {
+    if (this.data !== undefined) {
+      if (this.column.owner === 'source') {
+        this.entry.property(this.column.sourceColumn).value =
+          this.data.reduce<unknown>(
+            (_, foreignEntry) =>
+              foreignEntry.property(this.column.foreignColumn).value,
+            undefined,
+          )
+      } else {
+        this.data.forEach((foreignEntry) => {
+          foreignEntry.property(this.column.foreignColumn).value =
+            this.entry.property(this.column.sourceColumn).value
+        })
+      }
+    }
+  }
+
+  public override get value(): unknown {
+    return this.data?.map((entry) => entry.value)
+  }
+
+  public override set value(value: unknown) {
+    // unlink old entries
+    if (this.column.owner === 'source') {
+      this.entry.property(this.column.sourceColumn).value = undefined
+    } else {
+      this.data?.map(
+        (foreignEntry) =>
+          (foreignEntry.property(this.column.foreignColumn).value = undefined),
+      )
+    }
+    this.data = undefined
+
+    const rows = this.column.foreignTable.schema.array().decode(value)
+    if (rows.length > 0) {
+      const entries = rows.map((row) => {
+        const id = row[this.column.foreignTable.id.name]
+        if (id !== undefined) {
+          const foreignEntry = this.registry.findById(
+            this.column.foreignTable,
+            id,
+          )
+          if (this.column.type === 'strong') {
+            foreignEntry.value = row
+          }
+          return foreignEntry
+        } else {
+          const foreignEntry = this.registry.create(this.column.foreignTable)
+          foreignEntry.value = row
+          return foreignEntry
+        }
+      })
+      this.data = entries
+      this.sync()
     }
   }
 
