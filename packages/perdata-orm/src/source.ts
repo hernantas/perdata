@@ -1,9 +1,9 @@
-import { Knex, knex } from 'knex'
+import knex, { Knex } from 'knex'
 import { AnyRecord, ObjectSchema, Schema } from 'pertype'
-import { Query, QueryCollection } from './query'
-import { Transaction } from './transaction'
 import { EntryRegistry } from './entry'
 import { MetadataRegistry } from './metadata'
+import { Query, QueryCollection } from './query'
+import { Transaction } from './transaction'
 
 export interface DataSourceConfig {
   client: 'pg'
