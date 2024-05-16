@@ -180,7 +180,7 @@ describe('Query', () => {
 
       it('Should be able to insert (and save relation)', async () => {
         const foreignName = 'one_to_one_source_insert_save_2'
-        setup(db.connection(), foreignName, (number) => ({
+        await setup(db.connection(), foreignName, (number) => ({
           key: `key-${number}`,
           value: `value-${number}`,
         }))
@@ -229,7 +229,7 @@ describe('Query', () => {
         const foreignSchema = base.set('table', foreignName)
 
         const sourceName = 'one_to_one_source_save_insert_1'
-        setup(db.connection(), sourceName, (number) => ({
+        await setup(db.connection(), sourceName, (number) => ({
           key: `key-${number}`,
           value: `value-${number}`,
         }))
