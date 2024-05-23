@@ -88,6 +88,7 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
     private readonly condition?: QueryFilterGroup<P> | undefined,
     private readonly limitCount?: number,
     private readonly offsetCount?: number,
+    private readonly orderOptions?: QueryOrder<P>[] | undefined,
   ) {
     super(query, metadata, entries, schema)
   }
@@ -158,6 +159,7 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
       this.condition,
       count,
       this.offsetCount,
+      this.orderOptions,
     )
   }
 
@@ -170,6 +172,7 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
       this.condition,
       this.limitCount,
       count,
+      this.orderOptions,
     )
   }
 
@@ -184,8 +187,30 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
       and(condition),
       this.limitCount,
       this.offsetCount,
+      this.orderOptions,
     )
   }
+
+  public orderBy<K extends keyof P>(
+    key: K,
+    order: 'asc' | 'desc' = 'asc',
+  ): QueryFind<P> {
+    return new QueryFind(
+      this.query,
+      this.metadata,
+      this.entries,
+      this.schema,
+      this.condition,
+      this.limitCount,
+      this.offsetCount,
+      (this.orderOptions ?? []).concat({ key, order }),
+    )
+  }
+}
+
+export interface QueryOrder<P extends AnyRecord<Schema>> {
+  readonly key: keyof P
+  readonly order: 'asc' | 'desc'
 }
 
 function buildFilter<P extends AnyRecord<Schema>>(
