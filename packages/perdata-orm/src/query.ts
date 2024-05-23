@@ -1,5 +1,12 @@
 import { Knex } from 'knex'
-import { AnyRecord, ObjectSchema, OptionalOf, Schema, TypeOf } from 'pertype'
+import {
+  AnyRecord,
+  ObjectSchema,
+  OptionalOf,
+  Schema,
+  TypeOf,
+  string,
+} from 'pertype'
 import { Entry, EntryRegistry } from './entry'
 import { MetadataRegistry } from './metadata'
 
@@ -110,6 +117,13 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
 
     if (this.offsetCount !== undefined) {
       query = query.offset(this.offsetCount)
+    }
+
+    if (this.orderOptions !== undefined) {
+      query = this.orderOptions.reduce(
+        (query, opts) => query.orderBy(string().decode(opts.key), opts.order),
+        query,
+      )
     }
 
     const entries = table.baseSchema
