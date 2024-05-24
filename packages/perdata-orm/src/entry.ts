@@ -231,15 +231,11 @@ export class EntryPropertyRelation extends EntryProperty {
     if (value !== undefined) {
       const row = this.column.foreignTable.schema.decode(value)
       const id = row[this.column.foreignTable.id.name]
-      if (id !== undefined) {
-        this.data = this.registry.findById(this.column.foreignTable, id)
-        if (this.column.type === 'strong') {
-          this.data.value = row
-        }
-      } else {
-        this.data = this.registry.create(this.column.foreignTable)
-        this.data.value = row
-      }
+      this.data =
+        id !== undefined
+          ? this.registry.findById(this.column.foreignTable, id)
+          : this.registry.create(this.column.foreignTable)
+      this.data.value = row
       this.link()
     }
   }
@@ -301,20 +297,12 @@ export class EntryPropertyMultiRelation extends EntryProperty {
       .decode(value)
       .map((row) => {
         const id = row[this.column.foreignTable.id.name]
-        if (id !== undefined) {
-          const foreignEntry = this.registry.findById(
-            this.column.foreignTable,
-            id,
-          )
-          if (this.column.type === 'strong') {
-            foreignEntry.value = row
-          }
-          return foreignEntry
-        } else {
-          const foreignEntry = this.registry.create(this.column.foreignTable)
-          foreignEntry.value = row
-          return foreignEntry
-        }
+        const foreignEntry =
+          id !== undefined
+            ? this.registry.findById(this.column.foreignTable, id)
+            : this.registry.create(this.column.foreignTable)
+        foreignEntry.value = row
+        return foreignEntry
       })
     if (entries.length > 0) {
       this.data = entries
