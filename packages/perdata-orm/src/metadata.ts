@@ -28,7 +28,8 @@ export class MetadataRegistry {
       )
     }
 
-    const table = this.storage.get(name)
+    const signature = `${name}${schema.signature}`
+    const table = this.storage.get(signature)
     if (table !== undefined) {
       return table
     }
