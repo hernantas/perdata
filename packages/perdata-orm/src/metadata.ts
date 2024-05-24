@@ -46,9 +46,9 @@ export class TableMetadata {
   public constructor(
     registry: MetadataRegistry,
     public readonly name: string,
-    public readonly origin: Schema,
+    schema: Schema,
   ) {
-    const props = readProperties(origin)
+    const props = readProperties(schema)
     for (const [key, schema] of Object.entries(props)) {
       const relation = readEntity(schema)
       if (relation === undefined) {
@@ -85,14 +85,14 @@ export class TableMetadata {
 
   public get baseSchema(): ObjectSchema<AnyRecord<Schema>> {
     return object(
-      Object.fromEntries(this.baseColumns.map((col) => [col.name, col.origin])),
+      Object.fromEntries(this.baseColumns.map((col) => [col.name, col.schema])),
     ).set('entity', this.name)
   }
 
   public get relationSchema(): ObjectSchema<AnyRecord<Schema>> {
     return object(
       Object.fromEntries(
-        this.relationColumns.map((col) => [col.name, col.origin]),
+        this.relationColumns.map((col) => [col.name, col.schema]),
       ),
     ).set('entity', this.name)
   }
@@ -100,8 +100,8 @@ export class TableMetadata {
   public get schema(): ObjectSchema<AnyRecord<Schema>> {
     return object(
       Object.fromEntries([
-        ...this.baseColumns.map((col) => [col.name, col.origin]),
-        ...this.relationColumns.map((col) => [col.name, col.origin]),
+        ...this.baseColumns.map((col) => [col.name, col.schema]),
+        ...this.relationColumns.map((col) => [col.name, col.schema]),
       ]),
     ).set('entity', this.name)
   }
@@ -123,14 +123,14 @@ export class ColumnMetadata {
     /** Column name */
     public readonly name: string,
     /** {@link Schema} used to declare column */
-    public readonly origin: Schema,
+    public readonly schema: Schema,
     /** Mark if column is declared in schema or not */
     public readonly declared: boolean,
   ) {
-    this.id = readId(origin)
-    this.generated = readGenerated(origin)
-    this.nullable = detectNullable(origin)
-    this.collection = detectCollection(origin)
+    this.id = readId(schema)
+    this.generated = readGenerated(schema)
+    this.nullable = detectNullable(schema)
+    this.collection = detectCollection(schema)
   }
 }
 
@@ -167,7 +167,7 @@ export class RelationColumnMetadata
     const ownerColumn =
       ownerTable.column(joinColumnName) ??
       (() => {
-        let joinSchema = targetColumn.origin
+        let joinSchema = targetColumn.schema
           .set('id', false)
           .set('generated', false)
 

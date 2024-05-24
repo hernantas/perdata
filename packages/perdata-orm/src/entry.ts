@@ -195,13 +195,13 @@ export class EntryPropertyValue extends EntryProperty {
   }
 
   public override set value(value: unknown) {
-    const newData = this.column.origin.optional().decode(value)
+    const newData = this.column.schema.optional().decode(value)
     this.dirty = this.dirty || this.data !== newData
     this.data = newData
   }
 
   public override get raw(): unknown {
-    return this.column.origin.encode(this.data)
+    return this.column.schema.encode(this.data)
   }
 
   public override set raw(value: unknown) {
@@ -241,7 +241,7 @@ export class EntryPropertyRelation extends EntryProperty {
   }
 
   public override get raw(): unknown {
-    return this.column.origin.encode(this.value)
+    return this.column.schema.encode(this.value)
   }
 
   public override set raw(value: unknown) {
@@ -311,7 +311,7 @@ export class EntryPropertyMultiRelation extends EntryProperty {
   }
 
   public override get raw(): unknown {
-    return this.column.origin.encode(this.value)
+    return this.column.schema.encode(this.value)
   }
 
   public override set raw(value: unknown) {
