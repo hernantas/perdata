@@ -20,7 +20,7 @@
     "postgre",
     "postgresql"
   ],
-  "version": "0.2.1",
+  "version": "0.2.2",
   "files": [
     "dist"
   ],
@@ -39,7 +39,7 @@
   },
   "dependencies": {
     "knex": "^3.1.0",
-    "pertype": "^0.3.8"
+    "pertype": "^0.4.0"
   },
   "devDependencies": {
     "dotenv": "^16.4.5",
