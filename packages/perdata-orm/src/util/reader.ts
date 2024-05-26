@@ -22,7 +22,7 @@ export class SchemaReader {
       schema instanceof ArraySchema ||
       schema instanceof NullableSchema ||
       schema instanceof OptionalSchema
-        ? SchemaReader.traverse(fn, schema.inner)
+        ? SchemaReader.traverse(fn, schema.schema)
         : undefined
     return fn(schema, innerValue)
   }
