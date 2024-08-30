@@ -39,10 +39,10 @@
   },
   "dependencies": {
     "knex": "^3.1.0",
-    "pertype": "^0.4.0"
+    "pertype": "^0.5.1"
   },
   "devDependencies": {
     "dotenv": "^16.4.5",
-    "pg": "^8.11.5"
+    "pg": "^8.13.0"
   }
 }
