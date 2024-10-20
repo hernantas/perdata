@@ -1,155 +1,129 @@
-import { AnyRecord } from 'pertype'
 import {
   ColumnMetadata,
   RelationColumnMetadata,
   TableMetadata,
 } from './metadata'
-import { MapList } from './util/map'
+import { BiMap, MapSet, SafeMap } from './util/map'
+import {
+  Raw,
+  RawMultiObject,
+  RawMultiValue,
+  RawRelation,
+  RawSingleObject,
+  RawSingleValue,
+  RawValue,
+} from './util/raw'
 
 export class EntryRegistry {
-  private readonly storage: MapList<TableMetadata, Entry> = new MapList()
+  private readonly entries: MapSet<TableMetadata, Entry> = new MapSet()
+  private readonly mapId: SafeMap<
+    TableMetadata,
+    BiMap<NonNullable<Raw>, Entry>
+  > = new SafeMap(() => new BiMap())
 
   public get tables(): IterableIterator<TableMetadata> {
-    return this.storage.keys()
+    return this.entries.keys()
   }
 
   public get(table: TableMetadata): Entry[] {
-    return this.storage.get(table)
-  }
-
-  public findById(table: TableMetadata, id: unknown): Entry {
-    const entry = this.get(table).find((entry) => entry.id.value === id)
-    if (entry !== undefined) {
-      return entry
-    }
-
-    const newEntry = this.create(table)
-    newEntry.id.value = id
-    this.get(table).push(newEntry)
-    return newEntry
+    return this.entries.get(table).values().toArray()
   }
 
   public create(table: TableMetadata): Entry {
-    const newEntry = new Entry(this, table)
-    this.storage.get(table).push(newEntry)
-    return newEntry
+    const entry = new Entry(this, table)
+    this.entries.get(table).add(entry)
+    return entry
+  }
+
+  public findById(table: TableMetadata, id: Raw): Entry | undefined {
+    return id !== undefined ? this.mapId.get(table).getByKey(id) : undefined
+  }
+
+  public instantiate(
+    table: TableMetadata,
+    value: NonNullable<RawSingleObject>,
+  ): Entry
+  public instantiate(
+    table: TableMetadata,
+    value: RawSingleObject,
+  ): Entry | undefined
+  public instantiate(
+    table: TableMetadata,
+    value: RawSingleObject,
+  ): Entry | undefined {
+    if (value !== undefined) {
+      const id = value?.[table.id.name]
+      const entry = this.findById(table, id) ?? this.create(table)
+      entry.value = value
+      return entry
+    }
+    return undefined
+  }
+
+  public registerId(entry: Entry): void {
+    this.ensure(entry)
+
+    const table = entry.table
+    const mapId = this.mapId.get(table)
+    const id = entry.id.value
+    if (id !== undefined) {
+      const oldEntry = mapId.getByKey(id)
+      if (oldEntry !== undefined && oldEntry !== entry) {
+        throw new Error('Cannot register entry, id key already exists')
+      }
+      mapId.setByKey(id, entry)
+    } else {
+      mapId.deleteByValue(entry)
+    }
+  }
+
+  private ensure(entry: Entry): void {
+    if (!this.entries.get(entry.table).has(entry)) {
+      throw new Error('Entry is not created from this registry')
+    }
   }
 }
 
 export class Entry {
-  public readonly properties: EntryProperty[] = []
+  public readonly baseProperties: EntryPropertyValue[]
+  public readonly relationProperties: EntryPropertyRelation[]
+  public readonly id: EntryProperty
+
+  private _initialized: boolean = false
+  private _remove: boolean = false
 
   public constructor(
-    private readonly registry: EntryRegistry,
+    registry: EntryRegistry,
     public readonly table: TableMetadata,
   ) {
-    table.columns.forEach((column) => this.property(column))
-  }
-
-  public property(column: ColumnMetadata): EntryProperty {
-    if (this.table !== column.table) {
-      throw new Error(
-        `Column "${column.table.name}"."${column.name}" is not exists within "${this.table.name}" table`,
-      )
-    }
-
-    const property = this.properties.find((prop) => prop.column === column)
-    if (property !== undefined) {
-      return property
-    }
-
-    const newProperty =
-      column instanceof RelationColumnMetadata
-        ? column.collection
-          ? new EntryPropertyMultiRelation(this.registry, this, column)
-          : new EntryPropertyRelation(this.registry, this, column)
-        : new EntryPropertyValue(this.registry, this, column)
-    this.properties.push(newProperty)
-    return newProperty
-  }
-
-  public get id(): EntryProperty {
-    return this.property(this.table.id)
-  }
-
-  public get active(): boolean {
-    return this.properties.find((prop) => prop.active) !== undefined
-  }
-
-  public get initialized(): boolean {
-    return this.properties.find((prop) => prop.initialized) !== undefined
-  }
-
-  public set initialized(value: boolean) {
-    this.properties
-      .filter((prop) => prop.active)
-      .forEach((prop) => (prop.initialized = value))
-  }
-
-  public get dirty(): boolean {
-    return this.properties.find((prop) => prop.dirty) !== undefined
-  }
-
-  public set dirty(value: boolean) {
-    this.properties
-      .filter((prop) => prop.active)
-      .forEach((prop) => (prop.dirty = value))
-  }
-
-  public get value(): AnyRecord {
-    return Object.fromEntries(
-      this.properties.map((prop) => [prop.column.name, prop.value]),
+    this.baseProperties = table.baseColumns.map((column) =>
+      column.collection
+        ? new EntryPropertyMultiValue(registry, this, column)
+        : new EntryPropertySingleValue(registry, this, column),
     )
-  }
-
-  public set value(value: AnyRecord) {
-    this.properties
-      .filter((prop) => Object.hasOwn(value, prop.column.name))
-      .forEach((prop) => (prop.value = value[prop.column.name]))
-  }
-
-  public get raw(): AnyRecord {
-    return Object.fromEntries(
-      this.properties.map((prop) => [prop.column.name, prop.raw]),
+    this.relationProperties = table.relationColumns.map((column) =>
+      column.collection
+        ? new EntryPropertyMultiRelation(registry, this, column)
+        : new EntryPropertySingleRelation(registry, this, column),
     )
+    const id = this.properties.find((prop) => prop.column.id)
+    if (id === undefined) {
+      throw new Error('Unexpected error, table do not have identifier column')
+    }
+    this.id = id
   }
 
-  public set raw(value: AnyRecord) {
-    this.properties
-      .filter((prop) => Object.hasOwn(value, prop.column.name))
-      .forEach((prop) => (prop.raw = value[prop.column.name]))
+  public get properties(): EntryProperty[] {
+    return [...this.baseProperties, ...this.relationProperties]
   }
 
-  public sync(): void {
-    this.properties.forEach((prop) => prop.sync())
-  }
-}
-
-export abstract class EntryProperty {
-  /**
-   * Indicate if property is in use
-   */
-  private _active: boolean = false
-  /**
-   * Indicate if property is fetched from database
-   */
-  private _initialized: boolean = false
-  /**
-   * Indicate if property is dirty
-   */
-  private _dirty: boolean = false
-
-  public constructor(
-    public readonly registry: EntryRegistry,
-    public readonly entry: Entry,
-  ) {}
-
-  public get active(): boolean {
-    return this._active
-  }
-
-  public set active(value: boolean) {
-    this._active = value
+  public property(column: ColumnMetadata | string): EntryProperty | undefined {
+    const metadata =
+      typeof column === 'string' ? this.table.column(column) : column
+    if (metadata !== undefined) {
+      return this.properties.find((prop) => prop.column.name === metadata.name)
+    }
+    return undefined
   }
 
   public get initialized(): boolean {
@@ -157,197 +131,261 @@ export abstract class EntryProperty {
   }
 
   public set initialized(value: boolean) {
-    this.active = true
     this._initialized = value
   }
+
+  public get remove(): boolean {
+    return this._remove
+  }
+
+  public set remove(value: boolean) {
+    this._remove = value
+  }
+
+  public get dirty(): boolean {
+    return this.properties.find((prop) => prop.dirty) !== undefined
+  }
+
+  public set dirty(value: boolean) {
+    this.properties.forEach((prop) => (prop.dirty = value))
+  }
+
+  public get value(): NonNullable<RawSingleObject> {
+    const entries = this.properties.map(
+      (prop) => [prop.column.name, prop.value] as const,
+    )
+    return Object.fromEntries(entries)
+  }
+
+  public set value(value: RawSingleObject) {
+    this.properties.forEach((prop) => {
+      if (value === undefined) {
+        prop.value = undefined
+      } else if (Object.hasOwn(value, prop.column.name)) {
+        prop.value = value[prop.column.name]
+      }
+    })
+  }
+
+  public bind(): void {
+    this.relationProperties.forEach((prop) => prop.bind())
+  }
+
+  public unbind(): void {
+    this.relationProperties.forEach((prop) => prop.unbind())
+  }
+}
+
+export abstract class EntryProperty {
+  private _dirty: boolean = false
+
+  public constructor(
+    protected readonly registry: EntryRegistry,
+    protected readonly entry: Entry,
+    public readonly column: ColumnMetadata,
+  ) {}
 
   public get dirty(): boolean {
     return this._dirty
   }
 
   public set dirty(value: boolean) {
-    this.active = true
     this._dirty = value
   }
 
-  public sync(): void {}
+  public abstract get value(): Raw
 
-  public abstract get column(): ColumnMetadata
-  public abstract get value(): unknown
-  public abstract set value(value: unknown)
-  public abstract get raw(): unknown
-  public abstract set raw(value: unknown)
+  public abstract set value(value: Raw)
 }
 
-export class EntryPropertyValue extends EntryProperty {
-  private data: unknown
+export abstract class EntryPropertyValue extends EntryProperty {
+  public abstract override get value(): RawValue
+  public abstract override set value(value: RawValue)
+}
 
-  public constructor(
-    registry: EntryRegistry,
-    entry: Entry,
-    public readonly column: ColumnMetadata,
-  ) {
-    super(registry, entry)
-  }
+export class EntryPropertySingleValue extends EntryPropertyValue {
+  private data: RawSingleValue = undefined
 
-  public override get value(): unknown {
+  public get value(): RawSingleValue {
     return this.data
   }
 
-  public override set value(value: unknown) {
-    const newData = this.column.schema.optional().decode(value)
-    this.dirty = this.dirty || this.data !== newData
-    this.data = newData
-  }
+  public set value(value: RawSingleValue) {
+    this.dirty = this.dirty || this.data !== value
+    this.data = value
 
-  public override get raw(): unknown {
-    return this.column.schema.encode(this.data)
-  }
-
-  public override set raw(value: unknown) {
-    this.value = value
+    if (this.column.id) {
+      this.registry.registerId(this.entry)
+    }
   }
 }
 
-export class EntryPropertyRelation extends EntryProperty {
-  private data: Entry | undefined
+export class EntryPropertyMultiValue extends EntryPropertyValue {
+  private data: RawMultiValue
 
+  public get value(): RawMultiValue {
+    return this.data
+  }
+
+  public set value(value: RawMultiValue) {
+    this.dirty = this.dirty || isMultiValueDirty(this.data, value)
+    this.data = value
+  }
+}
+
+function isMultiValueDirty(
+  value1: RawMultiValue,
+  value2: RawMultiValue,
+): boolean {
+  const isUndefined1 = value1 === undefined
+  const isUndefined2 = value2 === undefined
+  if (isUndefined1 !== isUndefined2) {
+    return true
+  }
+
+  const array1 = value1 ?? []
+  const array2 = value2 ?? []
+  if (array1.length !== array2.length) {
+    return true
+  }
+
+  const length = Math.max(array1.length, array2.length)
+  for (let i = 0; i < length; i++) {
+    if (array1[i] !== array2[i]) {
+      return true
+    }
+  }
+
+  return false
+}
+
+export abstract class EntryPropertyRelation extends EntryProperty {
   public constructor(
     registry: EntryRegistry,
     entry: Entry,
-    public readonly column: RelationColumnMetadata,
+    public override readonly column: RelationColumnMetadata,
   ) {
-    super(registry, entry)
+    super(registry, entry, column)
   }
+  public abstract override get value(): RawRelation
+  public abstract override set value(value: RawRelation)
+  public abstract bind(): void
+  public abstract unbind(): void
+}
 
-  public override get value(): unknown {
+export class EntryPropertySingleRelation extends EntryPropertyRelation {
+  private data: Entry | undefined = undefined
+
+  public override get value(): RawSingleObject {
     return this.data?.value
   }
 
-  public override set value(value: unknown) {
-    this.unlink()
-    this.data = undefined
+  public override set value(value: RawSingleObject) {
+    const newData = this.registry.instantiate(this.column.foreignTable, value)
 
-    if (value !== undefined) {
-      const row = this.column.foreignTable.schema.decode(value)
-      const id = row[this.column.foreignTable.id.name]
-      this.data =
-        id !== undefined
-          ? this.registry.findById(this.column.foreignTable, id)
-          : this.registry.create(this.column.foreignTable)
-      this.data.value = row
-      this.link()
+    if (this.data !== newData) {
+      this.dirty = true
+      this.unbind()
+      this.data = newData
+      this.bind()
     }
   }
 
-  public override get raw(): unknown {
-    return this.column.schema.encode(this.value)
-  }
-
-  public override set raw(value: unknown) {
-    this.value = value
-  }
-
-  public override sync(): void {
-    this.link()
-  }
-
-  private link(): void {
-    if (this.column.owner === 'source') {
-      this.entry.property(this.column.sourceColumn).value = this.data?.property(
-        this.column.foreignColumn,
-      ).value
-    } else if (this.data !== undefined) {
-      this.data.property(this.column.foreignColumn).value = this.entry.property(
-        this.column.sourceColumn,
-      ).value
+  public override bind(): void {
+    const sourceProperty = this.entry.property(this.column.sourceColumn)
+    const foreignProperty = this.data?.property(this.column.foreignColumn)
+    if (this.column.owner === 'source' && sourceProperty !== undefined) {
+      sourceProperty.value = foreignProperty?.value
+    } else if (
+      this.column.owner === 'foreign' &&
+      foreignProperty !== undefined
+    ) {
+      foreignProperty.value = sourceProperty?.value
     }
   }
 
-  private unlink(): void {
-    if (this.column.owner === 'source') {
-      this.entry.property(this.column.sourceColumn).value = undefined
-    } else if (this.data !== undefined) {
-      this.data.property(this.column.foreignColumn).value = undefined
+  public override unbind(): void {
+    const sourceProperty = this.entry.property(this.column.sourceColumn)
+    const foreignProperty = this.data?.property(this.column.foreignColumn)
+    if (this.column.owner === 'source' && sourceProperty !== undefined) {
+      sourceProperty.value = undefined
+    } else if (
+      this.column.owner === 'foreign' &&
+      foreignProperty !== undefined
+    ) {
+      foreignProperty.value = undefined
     }
   }
 }
 
-export class EntryPropertyMultiRelation extends EntryProperty {
-  private data: Entry[] | undefined
+export class EntryPropertyMultiRelation extends EntryPropertyRelation {
+  private data: (Entry | undefined)[] | undefined
 
-  public constructor(
-    registry: EntryRegistry,
-    entry: Entry,
-    public readonly column: RelationColumnMetadata,
-  ) {
-    super(registry, entry)
+  public override get value(): RawMultiObject {
+    return this.data?.map((item) => item?.value)
   }
 
-  public override get value(): unknown {
-    return this.data?.map((entry) => entry.value)
+  public override set value(value: RawMultiObject) {
+    this.unbind()
+    const entries = value?.map((item) =>
+      this.registry.instantiate(this.column.foreignTable, item),
+    )
+    this.dirty = this.dirty || isEntriesDirty(this.data, entries)
+    this.data = entries
+    this.bind()
   }
 
-  public override set value(value: unknown) {
-    this.unlink()
-    this.data = undefined
-
-    const entries = this.column.foreignTable.schema
-      .array()
-      .decode(value)
-      .map((row) => {
-        const id = row[this.column.foreignTable.id.name]
-        const foreignEntry =
-          id !== undefined
-            ? this.registry.findById(this.column.foreignTable, id)
-            : this.registry.create(this.column.foreignTable)
-        foreignEntry.value = row
-        return foreignEntry
-      })
-    if (entries.length > 0) {
-      this.data = entries
-      this.link()
+  public override bind(): void {
+    const sourceProperty = this.entry.property(this.column.sourceColumn)
+    if (this.column.owner === 'source' && sourceProperty !== undefined) {
+      this.data
+        ?.map((entry) => entry?.property(this.column.foreignColumn))
+        .forEach((prop) => (sourceProperty.value = prop?.value))
+    } else if (this.column.owner === 'foreign') {
+      this.data
+        ?.map((entry) => entry?.property(this.column.foreignColumn))
+        .filter((prop) => prop !== undefined)
+        .forEach((prop) => (prop.value = sourceProperty?.value))
     }
   }
 
-  public override get raw(): unknown {
-    return this.column.schema.encode(this.value)
+  public override unbind(): void {
+    const sourceProperty = this.entry.property(this.column.sourceColumn)
+    if (this.column.owner === 'source' && sourceProperty !== undefined) {
+      sourceProperty.value = undefined
+    } else if (this.column.owner === 'foreign') {
+      this.data
+        ?.map((entry) => entry?.property(this.column.foreignColumn))
+        .filter((prop) => prop !== undefined)
+        .forEach((prop) => (prop.value = undefined))
+    }
+  }
+}
+
+function isEntriesDirty(
+  value1: (Entry | undefined)[] | undefined,
+  value2: (Entry | undefined)[] | undefined,
+): boolean {
+  const isUndefined1 = value1 === undefined
+  const isUndefined2 = value2 === undefined
+  if (isUndefined1 !== isUndefined2) {
+    return true
   }
 
-  public override set raw(value: unknown) {
-    this.value = value
+  const array1 = value1 ?? []
+  const array2 = value2 ?? []
+  if (array1.length !== array2.length) {
+    return true
   }
 
-  public override sync(): void {
-    this.link()
-  }
-
-  private link(): void {
-    if (this.data !== undefined) {
-      if (this.column.owner === 'source') {
-        this.entry.property(this.column.sourceColumn).value =
-          this.data.reduce<unknown>(
-            (_, foreignEntry) =>
-              foreignEntry.property(this.column.foreignColumn).value,
-            undefined,
-          )
-      } else {
-        this.data.forEach((foreignEntry) => {
-          foreignEntry.property(this.column.foreignColumn).value =
-            this.entry.property(this.column.sourceColumn).value
-        })
-      }
+  const length = Math.max(array1.length, array2.length)
+  for (let index = 0; index < length; index++) {
+    const id1 = array1[index]?.id.value
+    const id2 = array2[index]?.id.value
+    if (id1 !== id2) {
+      return true
     }
   }
 
-  private unlink(): void {
-    if (this.column.owner === 'source') {
-      this.entry.property(this.column.sourceColumn).value = undefined
-    } else {
-      this.data?.map(
-        (foreignEntry) =>
-          (foreignEntry.property(this.column.foreignColumn).value = undefined),
-      )
-    }
-  }
+  return false
 }
