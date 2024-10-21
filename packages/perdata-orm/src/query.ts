@@ -9,6 +9,7 @@ import {
 } from 'pertype'
 import { Entry, EntryRegistry } from './entry'
 import { MetadataRegistry } from './metadata'
+import { createRaw } from './util/raw'
 
 export class Query {
   public constructor(
@@ -100,7 +101,7 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
     super(query, metadata, entries, schema)
   }
 
-  public override async run(): Promise<OptionalOf<TypeOf<P>>[]> {
+  public async execute(): Promise<Entry[]> {
     const table = this.metadata.get(this.schema)
     let query = this.query
       .clone()
@@ -126,42 +127,48 @@ export class QueryFind<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
       )
     }
 
-    const entries = table.baseSchema
-      .array()
-      .decode(await query)
-      .map((row) => {
-        const entry = this.entries.findById(table, row[table.id.name])
-        entry.value = row
-        entry.dirty = false
-        entry.initialized = true
-        return entry
-      })
+    const result = await query
+    const decoded = table.baseSchema.array().decode(result)
+    const encoded = table.baseSchema.array().encode(decoded)
+    const entries = encoded
+      .map((item) => createRaw(table, item))
+      .map((raw) => this.entries.instantiate(table, raw))
+      .filter((entry) => entry !== undefined)
+    entries.forEach((entry) => {
+      entry.dirty = false
+      entry.initialized = true
+    })
 
     // resolve relations
     await Promise.all(
       table.relationColumns.map(async (column) => {
-        const lookups = entries.map(
-          (entry) => entry.property(column.sourceColumn).raw,
-        )
-        const foreignValues = await this.from(column.foreignTable.schema).find(
-          includes(column.foreignColumn.name, lookups),
-        )
+        const lookups = entries
+          .map((entry) => entry.property(column.sourceColumn)?.value)
+          .filter((value) => value !== undefined)
+        const foreignEntries = await this.from(column.foreignTable.schema)
+          .find(includes(column.foreignColumn.name, lookups))
+          .execute()
         entries.forEach((entry) => {
-          const matchedEntries = foreignValues.filter(
-            (foreignValue) =>
-              foreignValue[column.foreignColumn.name] ===
-              entry.property(column.sourceColumn).value,
-          )
-          entry.property(column).value = column.collection
-            ? matchedEntries
-            : matchedEntries[0]
+          const matchedValues = foreignEntries
+            .filter(
+              (foreignEntry) =>
+                foreignEntry.property(column.foreignColumn)?.value ===
+                entry.property(column.sourceColumn)?.value,
+            )
+            .map((entry) => entry.value)
+          entry.property(column)!.value = column.collection
+            ? matchedValues
+            : matchedValues[0]
         })
       }),
     )
 
-    return this.schema
-      .array()
-      .decode(entries.map((entry) => entry.value)) as OptionalOf<TypeOf<P>>[]
+    return entries
+  }
+
+  public override async run(): Promise<OptionalOf<TypeOf<P>>[]> {
+    const entries = await this.execute()
+    return this.schema.array().decode(entries.map((entry) => entry.value))
   }
 
   public limit(count: number): QueryFind<P> {
@@ -429,12 +436,7 @@ export class QuerySave<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
 
   public override async run(): Promise<OptionalOf<TypeOf<P>>[]> {
     const table = this.metadata.get(this.schema)
-    const id = this.value[table.id.name]
-    const entry =
-      id !== undefined
-        ? this.entries.findById(table, id)
-        : this.entries.create(table)
-    entry.value = this.value
+    const entry = this.entries.instantiate(table, this.value)
     await flush(this.query, this.entries, entry)
     return this.schema.array().decode(entry.value)
   }
@@ -447,7 +449,7 @@ async function flush(
 ): Promise<Entry> {
   await flushBase(connection, entry)
 
-  entry.sync()
+  entry.bind()
 
   // flush relations
   await Promise.all(
@@ -456,7 +458,7 @@ async function flush(
       .map((foreignEntry) => flush(connection, entries, foreignEntry)),
   )
 
-  entry.sync()
+  entry.bind()
 
   // flush entry once more if anything changes
   await flushBase(connection, entry)
@@ -467,48 +469,33 @@ async function flushBase(
   connection: Knex.QueryBuilder,
   entry: Entry,
 ): Promise<Entry> {
-  if (entry.id.value === undefined) {
-    // insert
-    const query = connection
-      .clone()
-      .from(entry.table.name)
-      .insert(entry.table.baseSchema.encode(entry.value))
-      .returning(entry.table.baseColumns.map((column) => column.name))
-    entry.table.baseSchema
-      .array()
-      .decode(await query)
-      .forEach((row) => {
-        entry.value = row
-        entry.dirty = false
-        entry.initialized = true
-      })
-  } else {
-    // update
-    const changes = entry.properties
-      .filter(
-        (prop) =>
-          prop.active &&
-          prop.dirty &&
-          !prop.column.id &&
-          !prop.column.generated,
-      )
-      .map((prop) => [prop.column.name, prop.raw])
-    if (changes.length > 0) {
-      const query = connection
-        .clone()
-        .from(entry.table.name)
-        .update(Object.fromEntries(changes))
-        .where(entry.table.id.name, entry.id.raw as string)
-        .returning(entry.table.baseColumns.map((column) => column.name))
-      entry.table.baseSchema
-        .array()
-        .decode(await query)
-        .forEach((row) => {
-          entry.value = row
-          entry.dirty = false
-          entry.initialized = true
-        })
-    }
+  const table = entry.table
+  const changeList = entry.baseProperties
+    .filter((prop) => prop.dirty && !prop.column.id && !prop.column.generated)
+    .map((prop) => [prop.column.name, prop.value ?? null] as const)
+  if (changeList.length > 0) {
+    const changes = Object.fromEntries(changeList)
+    const columns = table.baseColumns.map((column) => column.name)
+    const query =
+      entry.id.value !== undefined
+        ? connection
+            .clone()
+            .from(table.name)
+            .update(changes)
+            .where(table.id.name, entry.id.value)
+            .returning(columns)
+        : connection
+            .clone()
+            .from(entry.table.name)
+            .insert(changes)
+            .returning(columns)
+    const rows = await query
+    rows
+      .map((row) => createRaw(table, row))
+      .filter((raw) => raw !== undefined)
+      .forEach((raw) => (entry.value = raw))
+    entry.dirty = false
+    entry.initialized = true
   }
   return entry
 }
