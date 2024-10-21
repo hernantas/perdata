@@ -118,12 +118,8 @@ export class Entry {
   }
 
   public property(column: ColumnMetadata | string): EntryProperty | undefined {
-    const metadata =
-      typeof column === 'string' ? this.table.column(column) : column
-    if (metadata !== undefined) {
-      return this.properties.find((prop) => prop.column.name === metadata.name)
-    }
-    return undefined
+    const columnName = typeof column === 'string' ? column : column.name
+    return this.properties.find((prop) => prop.column.name === columnName)
   }
 
   public get initialized(): boolean {
