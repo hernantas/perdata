@@ -12,24 +12,28 @@ async function build() {
       file,
     ]),
   )
+
   const bundle = await rollup({
     input: files,
-    plugins: [ts({ outDir: './dist', exclude: './**/*.test.ts' })],
+    plugins: [
+      ts({
+        outDir: './dist/type',
+        exclude: '**/*.test.ts',
+        outputToFilesystem: true,
+      }),
+    ],
   })
-
-  await bundle.write({
-    dir: './dist',
-    format: 'esm',
-    entryFileNames: '[name].mjs',
-    sourcemap: true,
-  })
-
   await bundle.write({
     dir: './dist',
     format: 'cjs',
-    entryFileNames: '[name].cjs',
+    entryFileNames: 'cjs/[name].js',
+    sourcemap: true,
+  })
+  await bundle.write({
+    dir: './dist',
+    format: 'esm',
+    entryFileNames: 'esm/[name].js',
     sourcemap: true,
   })
 }
-
 build()
