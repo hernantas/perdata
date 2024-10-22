@@ -454,7 +454,7 @@ async function flush(
   // flush relations
   await Promise.all(
     entry.table.relationColumns
-      .flatMap((column) => entries.get(column.foreignTable))
+      .flatMap((column) => entries.findAll(column.foreignTable))
       .map((foreignEntry) => flush(connection, entries, foreignEntry)),
   )
 

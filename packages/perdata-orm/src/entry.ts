@@ -15,24 +15,24 @@ import {
 } from './util/raw'
 
 export class EntryRegistry {
-  private readonly entries: MapSet<TableMetadata, Entry> = new MapSet()
+  private readonly storage: MapSet<TableMetadata, Entry> = new MapSet()
   private readonly mapId: SafeMap<
     TableMetadata,
     BiMap<NonNullable<Raw>, Entry>
   > = new SafeMap(() => new BiMap())
 
   public get tables(): IterableIterator<TableMetadata> {
-    return this.entries.keys()
-  }
-
-  public get(table: TableMetadata): Entry[] {
-    return this.entries.get(table).values().toArray()
+    return this.storage.keys()
   }
 
   public create(table: TableMetadata): Entry {
     const entry = new Entry(this, table)
-    this.entries.get(table).add(entry)
+    this.storage.get(table).add(entry)
     return entry
+  }
+
+  public findAll(table: TableMetadata): Entry[] {
+    return this.storage.get(table).values().toArray()
   }
 
   public findById(table: TableMetadata, id: Raw): Entry | undefined {
@@ -78,7 +78,7 @@ export class EntryRegistry {
   }
 
   private ensure(entry: Entry): void {
-    if (!this.entries.get(entry.table).has(entry)) {
+    if (!this.storage.get(entry.table).has(entry)) {
       throw new Error('Entry is not created from this registry')
     }
   }
