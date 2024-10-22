@@ -281,9 +281,7 @@ export class EntryPropertySingleRelation extends EntryPropertyRelation {
 
     if (this.data !== newData) {
       this.dirty = true
-      this.unbind()
       this.data = newData
-      this.bind()
     }
   }
 
@@ -322,13 +320,11 @@ export class EntryPropertyMultiRelation extends EntryPropertyRelation {
   }
 
   public override set value(value: RawMultiObject) {
-    this.unbind()
     const entries = value?.map((item) =>
       this.registry.instantiate(this.column.foreignTable, item),
     )
     this.dirty = this.dirty || isEntriesDirty(this.data, entries)
     this.data = entries
-    this.bind()
   }
 
   public override bind(): void {
