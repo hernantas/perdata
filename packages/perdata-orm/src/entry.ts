@@ -84,6 +84,10 @@ export class EntryRegistry {
   }
 }
 
+export type NullOf<T> = T extends undefined
+  ? null
+  : { [K in keyof T]: NullOf<T[K]> }
+
 export class Entry {
   public readonly baseProperties: EntryPropertyValue[]
   public readonly relationProperties: EntryPropertyRelation[]
@@ -197,6 +201,7 @@ export abstract class EntryProperty {
 export abstract class EntryPropertyValue extends EntryProperty {
   public abstract override get value(): RawValue
   public abstract override set value(value: RawValue)
+  public abstract get changes(): NullOf<RawValue>
 }
 
 export class EntryPropertySingleValue extends EntryPropertyValue {
@@ -214,6 +219,10 @@ export class EntryPropertySingleValue extends EntryPropertyValue {
       this.registry.registerId(this.entry)
     }
   }
+
+  public override get changes(): NullOf<RawSingleValue> {
+    return this.value ?? null
+  }
 }
 
 export class EntryPropertyMultiValue extends EntryPropertyValue {
@@ -226,6 +235,10 @@ export class EntryPropertyMultiValue extends EntryPropertyValue {
   public set value(value: RawMultiValue) {
     this.dirty = this.dirty || isMultiValueDirty(this.data, value)
     this.data = value
+  }
+
+  public override get changes(): NullOf<RawMultiValue> {
+    return this.value?.map((item) => item ?? null) ?? null
   }
 }
 
