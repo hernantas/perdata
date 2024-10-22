@@ -87,7 +87,7 @@ export class EntryRegistry {
 export class Entry {
   public readonly baseProperties: EntryPropertyValue[]
   public readonly relationProperties: EntryPropertyRelation[]
-  public readonly id: EntryProperty
+  public readonly id: EntryPropertyValue
 
   private _initialized: boolean = false
   private _remove: boolean = false
@@ -106,7 +106,7 @@ export class Entry {
         ? new EntryPropertyMultiRelation(registry, this, column)
         : new EntryPropertySingleRelation(registry, this, column),
     )
-    const id = this.properties.find((prop) => prop.column.id)
+    const id = this.baseProperties.find((prop) => prop.column.id)
     if (id === undefined) {
       throw new Error('Unexpected error, table do not have identifier column')
     }
