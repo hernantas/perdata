@@ -8,7 +8,7 @@ import {
   string,
 } from 'pertype'
 import { Entry, EntryRegistry } from './entry'
-import { MetadataRegistry } from './metadata'
+import { MetadataRegistry, TableMetadata } from './metadata'
 import { createRaw } from './util/raw'
 
 export class Query {
@@ -62,7 +62,7 @@ export class QueryCollection<P extends AnyRecord<Schema>> extends Query {
     )
   }
 
-  public save(value: Partial<OptionalOf<TypeOf<P>>>): QuerySave<P> {
+  public save(value: OptionalOf<TypeOf<P>>): QuerySave<P> {
     return new QuerySave(
       this.query,
       this.metadata,
@@ -415,10 +415,12 @@ export class QueryInsert<
 
   public override async run(): Promise<OptionalOf<TypeOf<P>>[]> {
     const table = this.metadata.get(this.schema)
-    const entry = this.entries.create(table)
-    entry.value = this.value
-    entry.id.value = undefined
-    await flush(this.query, this.entries, entry)
+    const encoded = this.schema.encode(this.value)
+    const raw = createRaw(table, encoded)!
+    const entry = this.entries.instantiate(table, raw)
+    await loadAll(this.query, this.entries, table)
+    entry.value = raw
+    await commit(this.query, this.entries, table)
     return this.schema.array().decode(entry.value)
   }
 }
@@ -429,73 +431,207 @@ export class QuerySave<P extends AnyRecord<Schema>> extends QueryExecutable<P> {
     metadata: MetadataRegistry,
     entries: EntryRegistry,
     schema: ObjectSchema<P>,
-    private readonly value: Partial<TypeOf<P>>,
+    private readonly value: OptionalOf<TypeOf<P>>,
   ) {
     super(query, metadata, entries, schema)
   }
 
   public override async run(): Promise<OptionalOf<TypeOf<P>>[]> {
     const table = this.metadata.get(this.schema)
-    const entry = this.entries.instantiate(table, this.value)
-    await flush(this.query, this.entries, entry)
+    const encoded = this.schema.encode(this.value)
+    const raw = createRaw(table, encoded)!
+    const entry = this.entries.instantiate(table, raw)
+    await loadAll(this.query, this.entries, table)
+    entry.value = raw
+    await commit(this.query, this.entries, table)
     return this.schema.array().decode(entry.value)
   }
 }
 
-async function flush(
+async function loadAll(
   connection: Knex.QueryBuilder,
-  entries: EntryRegistry,
-  entry: Entry,
-): Promise<Entry> {
-  await flushBase(connection, entry)
-
-  entry.bind()
-
-  // flush relations
-  await Promise.all(
-    entry.table.relationColumns
-      .flatMap((column) => entries.findAll(column.foreignTable))
-      .map((foreignEntry) => flush(connection, entries, foreignEntry)),
-  )
-
-  entry.bind()
-
-  // flush entry once more if anything changes
-  await flushBase(connection, entry)
-  return entry
+  registry: EntryRegistry,
+  table: TableMetadata,
+): Promise<void> {
+  await Promise.all([
+    ...table.relationColumns
+      .map((column) => column.foreignTable)
+      .map((foreignTable) => load(connection, registry, foreignTable)),
+    load(connection, registry, table),
+  ])
 }
 
-async function flushBase(
+async function load(
   connection: Knex.QueryBuilder,
-  entry: Entry,
-): Promise<Entry> {
-  const table = entry.table
-  const changeList = entry.baseProperties
-    .filter((prop) => prop.dirty && !prop.column.id && !prop.column.generated)
-    .map((prop) => [prop.column.name, prop.value ?? null] as const)
-  if (changeList.length > 0) {
-    const changes = Object.fromEntries(changeList)
-    const columns = table.baseColumns.map((column) => column.name)
-    const query =
-      entry.id.value !== undefined
-        ? connection
-            .clone()
-            .from(table.name)
-            .update(changes)
-            .where(table.id.name, entry.id.value)
-            .returning(columns)
-        : connection
-            .clone()
-            .from(entry.table.name)
-            .insert(changes)
-            .returning(columns)
-    const rows = await query
+  registry: EntryRegistry,
+  table: TableMetadata,
+): Promise<void> {
+  const ids = registry
+    .findAll(table)
+    .filter((entry) => !entry.initialized)
+    .map((entry) => entry.id.value)
+    .filter((raw) => raw !== undefined)
+  if (ids.length > 0) {
+    const columnNames = table.baseColumns.map((column) => column.name)
+    const query = connection
+      .clone()
+      .from(table.name)
+      .select(columnNames)
+      .whereIn(table.id.name, ids)
+    const rows: unknown[] = await query
     rows
       .map((row) => createRaw(table, row))
-      .filter((raw) => raw !== undefined)
-      .forEach((raw) => (entry.value = raw))
-    entry.dirty = false
-    entry.initialized = true
+      .forEach((raw) => registry.instantiate(table, raw))
   }
-  return entry
+}
+
+async function commit(
+  connection: Knex.QueryBuilder,
+  registry: EntryRegistry,
+  table: TableMetadata,
+): Promise<void> {
+  registry
+    .findAll(table)
+    .filter((entry) => entry.remove)
+    .forEach((entry) =>
+      entry.relationProperties.forEach((prop) => (prop.value = undefined)),
+    )
+  await commitSave(connection, registry, table)
+  await commitRemove(connection, registry, table)
+}
+
+async function commitSave(
+  connection: Knex.QueryBuilder,
+  registry: EntryRegistry,
+  table: TableMetadata,
+): Promise<void> {
+  const entries = registry.findAll(table)
+
+  // commit dependencies
+  await Promise.all(
+    table.relationColumns
+      .filter((column) => column.owner === 'source')
+      .map((column) => column.foreignTable)
+      .map((foreignTable) => commitSave(connection, registry, foreignTable)),
+  )
+  entries.forEach((entry) => entry.bind())
+
+  // commit current entry
+  await Promise.all(
+    entries
+      .filter((entry) => entry.dirty && !entry.remove)
+      .map((entry) =>
+        entry.id.value !== undefined
+          ? commitUpdateOne(connection, entry)
+          : commitInsertOne(connection, entry),
+      ),
+  )
+  entries.forEach((entry) => entry.bind())
+
+  // commit dependents
+  await Promise.all(
+    table.relationColumns
+      .filter((column) => column.owner === 'foreign')
+      .map((column) => column.foreignTable)
+      .map((foreignTable) => commitSave(connection, registry, foreignTable)),
+  )
+}
+
+async function commitUpdateOne(
+  connection: Knex.QueryBuilder,
+  entry: Entry,
+): Promise<void> {
+  const changes = entry.baseProperties
+    .filter((prop) => prop.dirty && !prop.column.id && !prop.column.generated)
+    .map((prop) => [prop.column.name, prop.changes] as const)
+  const updateMap = Object.fromEntries(changes)
+  const columnNames = entry.table.baseColumns.map((column) => column.name)
+  const query = connection
+    .clone()
+    .from(entry.table.name)
+    .update(updateMap)
+    .where(entry.id.column.name, entry.id.value)
+    .limit(1)
+    .returning(columnNames)
+  const rows = await query
+  rows
+    .map((row) => createRaw(entry.table, row))
+    .filter((raw) => raw !== undefined)
+    .forEach((raw) => (entry.value = raw))
+  entry.dirty = false
+  entry.initialized = true
+}
+
+async function commitInsertOne(
+  connection: Knex.QueryBuilder,
+  entry: Entry,
+): Promise<void> {
+  const changes = entry.baseProperties
+    .filter((prop) => prop.dirty && !prop.column.generated)
+    .map((prop) => [prop.column.name, prop.changes] as const)
+  const insertMap = Object.fromEntries(changes)
+  const columnNames = entry.table.baseColumns.map((column) => column.name)
+  const query = connection
+    .clone()
+    .from(entry.table.name)
+    .insert(insertMap)
+    .returning(columnNames)
+  const rows = await query
+  rows
+    .map((row) => createRaw(entry.table, row))
+    .filter((raw) => raw !== undefined)
+    .forEach((raw) => (entry.value = raw))
+  entry.dirty = false
+  entry.initialized = true
+}
+
+async function commitRemove(
+  connection: Knex.QueryBuilder,
+  registry: EntryRegistry,
+  table: TableMetadata,
+): Promise<void> {
+  // commit dependents
+  await Promise.all(
+    table.relationColumns
+      .filter((column) => column.owner === 'foreign')
+      .map((column) => column.foreignTable)
+      .map((foreignTable) => commitRemove(connection, registry, foreignTable)),
+  )
+
+  await Promise.all(
+    registry
+      .findAll(table)
+      .filter((entry) => entry.remove)
+      .map((entry) => commitDeleteOne(connection, entry)),
+  )
+
+  // commit dependencies
+  await Promise.all(
+    table.relationColumns
+      .filter((column) => column.owner === 'source')
+      .map((column) => column.foreignTable)
+      .map((foreignTable) => commitRemove(connection, registry, foreignTable)),
+  )
+}
+
+async function commitDeleteOne(
+  connection: Knex.QueryBuilder,
+  entry: Entry,
+): Promise<void> {
+  const columnNames = entry.table.baseColumns.map((column) => column.name)
+  const query = connection
+    .clone()
+    .from(entry.table.name)
+    .delete()
+    .where(entry.id.column.name, entry.id.value)
+    .limit(1)
+    .returning(columnNames)
+  const rows = await query
+  rows
+    .map((row) => createRaw(entry.table, row))
+    .filter((raw) => raw !== undefined)
+    .forEach((raw) => (entry.value = raw))
+  entry.remove = false
+  entry.dirty = false
+  entry.initialized = false
 }
