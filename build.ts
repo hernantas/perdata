@@ -1,4 +1,4 @@
-import ts from '@rollup/plugin-typescript'
+import typescript from '@rollup/plugin-typescript'
 import { sync } from 'glob'
 import { extname, relative } from 'node:path'
 import { rollup } from 'rollup'
@@ -16,7 +16,7 @@ async function build() {
   const bundle = await rollup({
     input: files,
     plugins: [
-      ts({
+      typescript({
         outDir: './dist/type',
         exclude: '**/*.test.ts',
         outputToFilesystem: true,
