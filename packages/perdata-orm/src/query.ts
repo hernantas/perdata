@@ -526,7 +526,7 @@ async function commitSave(
     entries
       .filter((entry) => entry.dirty && !entry.remove)
       .map((entry) =>
-        entry.id.value !== undefined
+        entry.initialized
           ? commitUpdateOne(connection, entry)
           : commitInsertOne(connection, entry),
       ),
