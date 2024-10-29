@@ -481,7 +481,12 @@ async function load(
     const rows: unknown[] = await query
     rows
       .map((row) => createRaw(table, row))
-      .forEach((raw) => registry.instantiate(table, raw))
+      .map((raw) => registry.instantiate(table, raw))
+      .filter((entry) => entry !== undefined)
+      .forEach((entry) => {
+        entry.dirty = false
+        entry.initialized = true
+      })
   }
 }
 
